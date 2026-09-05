@@ -431,6 +431,20 @@ When making a decision that contradicts an existing ADR, do not silently overrid
 11. Treat ADRs as project-level architectural decisions.
 12. Avoid speculative abstractions that exist only for possible future features.
 
+## Verification
+
+After code changes, run the repository verification commands defined in the
+Makefile:
+
+```text
+make lint
+make test
+```
+
+Run `make install-deps` first only when dependencies are missing or need to be
+restored. Do not use `make run` as a verification command because it starts
+the Discord bot.
+
 ---
 
 # Current Status
