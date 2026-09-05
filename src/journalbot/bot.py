@@ -8,6 +8,14 @@ from discord.ext import commands
 
 LOGGER = logging.getLogger(__name__)
 
+COMMANDS_HELP = "\n".join(
+    (
+        "Available commands:",
+        "- `Bot: describe` — describe JournalBot's purpose.",
+        "- `Bot: help` or `Bot: commands` — show this command list.",
+    )
+)
+
 
 class JournalBot(commands.Bot):
     """Minimal Discord bot for the JournalBot application."""
@@ -51,7 +59,7 @@ class JournalBot(commands.Bot):
         self._ready_announcement_sent = True
 
     async def on_message(self, message: discord.Message) -> None:
-        """Respond to the bot's simple text description prompt."""
+        """Respond to the bot's supported text commands."""
         if message.author.bot:
             return
 
@@ -61,6 +69,10 @@ class JournalBot(commands.Bot):
                 "I am JournalBot, a Discord bot for keeping a structured journal "
                 "for Pathfinder 2e campaigns."
             )
+
+        if message.content in {"Bot: help", "Bot: commands"}:
+            LOGGER.info("Bot command list invoked")
+            await message.channel.send(COMMANDS_HELP)
 
         await self.process_commands(message)
 

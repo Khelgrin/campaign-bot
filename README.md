@@ -27,5 +27,6 @@ manager or environment-variable settings, rather than uploading a `.env` file.
 Hosting and deployment infrastructure remain intentionally undecided.
 
 The current skeleton connects to Discord, logs when it is ready, and replies to
-the exact chat message `Bot: describe` with its purpose. It deliberately contains
-no campaign or journal commands yet.
+`Bot: describe` with its purpose. Send `Bot: help` or `Bot: commands` to list
+the available text commands. It deliberately contains no campaign or journal
+commands yet.
