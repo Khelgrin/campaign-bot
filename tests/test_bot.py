@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import discord
 import pytest
+from discord.ext import commands
 
 from journalbot.bot import (
     COMMANDS_HELP,
@@ -104,6 +105,63 @@ def test_other_messages_do_not_send_a_response(
 
     user_message.channel.send.assert_not_awaited()
     process_commands.assert_awaited_once_with(user_message)
+
+
+@pytest.mark.parametrize("command_name", ["start-campaign", "end-session"])
+def test_campaign_and_session_commands_are_logged(
+    bot: JournalBot,
+    command_name: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Lifecycle command invocations include timestamp, user, and text."""
+    context = SimpleNamespace(
+        command=SimpleNamespace(qualified_name=command_name),
+        author=SimpleNamespace(name="Tomek", id=42),
+        message=SimpleNamespace(content=f"!{command_name} details"),
+    )
+
+    with caplog.at_level("INFO", logger="journalbot.bot"):
+        run(bot.on_command(cast(Any, context)))
+
+    assert "command_invoked" in caplog.text
+    assert "user=Tomek" in caplog.text
+    assert "user_id=42" in caplog.text
+    assert f"command=!{command_name} details" in caplog.text
+    assert "timestamp=" in caplog.text
+
+
+def test_unrelated_commands_are_not_logged(
+    bot: JournalBot, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Only campaign and session commands use the invocation audit log."""
+    context = SimpleNamespace(
+        command=SimpleNamespace(qualified_name="help"),
+        author=SimpleNamespace(name="Tomek", id=42),
+        message=SimpleNamespace(content="!help"),
+    )
+
+    with caplog.at_level("INFO", logger="journalbot.bot"):
+        run(bot.on_command(cast(Any, context)))
+
+    assert "command_invoked" not in caplog.text
+
+
+def test_missing_required_parameter_explains_how_to_get_help(
+    bot: JournalBot,
+) -> None:
+    """Missing command arguments produce actionable user-facing guidance."""
+    context = MagicMock()
+    context.send = AsyncMock()
+    error = commands.MissingRequiredArgument(
+        cast(Any, SimpleNamespace(name="title", displayed_name="title"))
+    )
+
+    run(bot.on_command_error(context, error))
+
+    context.send.assert_awaited_once_with(
+        "Missing required parameter: `title`. "
+        "Use `Bot: help` for command usage."
+    )
 
 
 def test_ready_does_not_fetch_a_channel_without_configuration(
@@ -235,6 +293,82 @@ def test_campaign_commands_cover_lifecycle_and_guild_context(tmp_path) -> None:
     )
     ctx.send.assert_awaited_once_with(
         f"Selected campaign **New Kingmaker** (ID: {campaign.id})."
+    )
+
+
+def test_session_commands_cover_lifecycle_and_context(tmp_path) -> None:
+    """Session commands expose creation, inspection, updates, and ending."""
+    cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
+    ctx = MagicMock()
+    ctx.guild = SimpleNamespace(id=123)
+    ctx.send = AsyncMock()
+
+    run(
+        cast(Any, cog.start_campaign.callback)(
+            cog, ctx, "Kingmaker", description="Stolen land"
+        )
+    )
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.start_session.callback)(
+            cog, ctx, "Opening", description="The party arrives"
+        )
+    )
+    session = cog.sessions.current(123)
+    ctx.send.assert_awaited_once_with(
+        f"Session **Opening** created and selected "
+        f"(ID: {session.id}, number: {session.number})."
+    )
+
+    ctx.send.reset_mock()
+    run(cast(Any, cog.list_session.callback)(cog, ctx))
+    assert f"* 1: Opening (ID: {session.id}) [ACTIVE]" in (
+        ctx.send.await_args.args[0]
+    )
+
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.read_session.callback)(
+            cog, ctx, identifier=str(session.id)
+        )
+    )
+    read_response = ctx.send.await_args.args[0]
+    assert f"ID: {session.id}" in read_response
+    assert "Title: Opening" in read_response
+    assert "Description: The party arrives" in read_response
+    assert "Status: ACTIVE" in read_response
+
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.update_session.callback)(
+            cog,
+            ctx,
+            str(session.id),
+            "Revised opening",
+            description="Updated notes",
+            played_at="2026-09-05T18:00:00+00:00",
+        )
+    )
+    updated = cog.sessions.find(str(session.id), session.campaign_id)
+    assert updated.title == "Revised opening"
+    assert updated.description == "Updated notes"
+    assert updated.played_at == "2026-09-05T18:00:00+00:00"
+
+    ctx.send.reset_mock()
+    run(cast(Any, cog.end_session.callback)(cog, ctx))
+    ended = cog.sessions.current(123)
+    assert ended.status == "ENDED"
+    ctx.send.assert_awaited_once_with("Session **Revised opening** ended.")
+
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.use_session.callback)(
+            cog, ctx, identifier="Revised opening"
+        )
+    )
+    ctx.send.assert_awaited_once_with(
+        f"Selected session **Revised opening** "
+        f"(ID: {session.id}, number: {session.number})."
     )
 
 

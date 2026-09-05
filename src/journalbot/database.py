@@ -5,7 +5,16 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from sqlalchemy import CheckConstraint, ForeignKey, String, create_engine, event
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    create_engine,
+    event,
+    text,
+)
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.orm import Session, sessionmaker
@@ -38,6 +47,47 @@ class CampaignModel(Base):
     contexts: Mapped[list["ServerContextModel"]] = relationship(
         back_populates="current_campaign"
     )
+    sessions: Mapped[list["SessionModel"]] = relationship(
+        back_populates="campaign"
+    )
+
+
+class SessionModel(Base):
+    """Persistent RPG session record."""
+
+    __tablename__ = "sessions"
+    __table_args__ = (
+        CheckConstraint("number > 0", name="session_number_positive"),
+        CheckConstraint(
+            "(status = 'ACTIVE' AND ended_at IS NULL) OR "
+            "(status = 'ENDED' AND ended_at IS NOT NULL)",
+            name="session_lifecycle",
+        ),
+        UniqueConstraint("campaign_id", "number", name="uq_session_campaign_number"),
+        UniqueConstraint("campaign_id", "title", name="uq_session_campaign_title"),
+        Index(
+            "uq_active_session_per_campaign",
+            "campaign_id",
+            unique=True,
+            sqlite_where=text("status = 'ACTIVE'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(
+        ForeignKey("campaigns.id"), nullable=False
+    )
+    number: Mapped[int] = mapped_column(nullable=False)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    played_at: Mapped[str] = mapped_column(String, nullable=False)
+    ended_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    campaign: Mapped[CampaignModel] = relationship(back_populates="sessions")
+    contexts: Mapped[list["ServerContextModel"]] = relationship(
+        back_populates="current_session"
+    )
 
 
 class ServerContextModel(Base):
@@ -49,8 +99,14 @@ class ServerContextModel(Base):
     current_campaign_id: Mapped[int | None] = mapped_column(
         ForeignKey("campaigns.id"), nullable=True
     )
+    current_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sessions.id"), nullable=True
+    )
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
     current_campaign: Mapped[CampaignModel | None] = relationship(
+        back_populates="contexts"
+    )
+    current_session: Mapped[SessionModel | None] = relationship(
         back_populates="contexts"
     )
 
@@ -72,6 +128,17 @@ def create_session_factory(database_path: str | Path) -> sessionmaker[Session]:
 
     engine = create_engine(url, future=True)
     Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        columns = {
+            row[1] for row in connection.exec_driver_sql(
+                "PRAGMA table_info(server_contexts)"
+            )
+        }
+        if "current_session_id" not in columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE server_contexts ADD COLUMN current_session_id "
+                "INTEGER REFERENCES sessions(id)"
+            )
     return sessionmaker(bind=engine, expire_on_commit=False)
 
 

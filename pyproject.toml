@@ -19,6 +19,8 @@ build-backend = "hatchling.build"
 dev = [
     "mypy>=1.18.0",
     "pytest>=8.0,<9",
+    "coverage>=7.0,<8",
+    "diff-cover>=9.0,<10",
     "ruff>=0.12.0",
 ]
 

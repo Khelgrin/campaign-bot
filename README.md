@@ -33,7 +33,20 @@ Run static checks and the offline unit test suite before pushing changes:
 ```text
 make lint
 make test
+make coverage
+make coverage-check
 ```
+
+`make coverage` prints the overall coverage and writes HTML and XML reports.
+`make coverage-check` additionally uses `diff-cover` to verify that changed
+lines have at least 80% coverage. Set `BASE_REF` to compare against another Git
+ref, for example `make coverage-check BASE_REF=origin/main`.
+
+Local and CI coverage checks use the same Makefile commands. Locally,
+`BASE_REF` defaults to `HEAD` and checks staged or unstaged changes. GitHub
+Actions compares pull requests with their base commit, or pushes with the
+previous commit. CI also uploads the generated HTML and XML reports as the
+`coverage-reports` workflow artifact.
 
 The pytest suite uses mocked Discord objects, so it does not require a bot token,
 a running bot, or access to a Discord server. GitHub Actions runs both checks on
@@ -44,7 +57,8 @@ the intended deployment configuration: set the secret in the chosen host's secre
 manager or environment-variable settings, rather than uploading a `.env` file.
 Hosting and deployment infrastructure remain intentionally undecided.
 
-The bot connects to Discord, logs when it is ready, and supports campaign
-commands such as `!start-campaign`, `!use-campaign`, `!list-campaign`,
-`!read-campaign`, `!update-campaign`, and `!end-campaign`. Send `Bot: help` or
-`Bot: commands` to list them.
+The bot connects to Discord, logs when it is ready, and supports campaign and
+session commands such as `!start-campaign`, `!use-campaign`, `!list-campaign`,
+`!read-campaign`, `!update-campaign`, `!end-campaign`, `!start-session`,
+`!use-session`, `!list-session`, `!read-session`, `!update-session`, and
+`!end-session`. Send `Bot: help` or `Bot: commands` to list them.

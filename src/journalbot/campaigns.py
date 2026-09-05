@@ -7,10 +7,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session as OrmSession
 
 from journalbot.database import (
     CampaignModel,
+    SessionModel,
     ServerContextModel,
     create_session_factory,
 )
@@ -30,6 +31,10 @@ class AmbiguousCampaignError(CampaignError):
 
 class NoCampaignSelectedError(CampaignError):
     """Raised when a guild has no selected campaign."""
+
+
+class CampaignHasActiveSessionError(CampaignError):
+    """Raised when a campaign cannot end because a session is active."""
 
 
 @dataclass(frozen=True)
@@ -63,6 +68,7 @@ class CampaignStore:
     """Repository for campaigns and guild-scoped current campaign context."""
 
     def __init__(self, database_path: str | Path) -> None:
+        self.database_path = database_path
         self.session_factory = create_session_factory(database_path)
 
     def create(
@@ -127,6 +133,23 @@ class CampaignStore:
             model = session.get(CampaignModel, campaign.id)
             if model is None:
                 raise CampaignNotFoundError(f"Campaign '{identifier}' was not found.")
+            context = session.get(ServerContextModel, str(guild_id))
+            if (
+                context is not None
+                and context.current_campaign_id is not None
+                and context.current_campaign_id != model.id
+            ):
+                active_session = session.scalar(
+                    select(SessionModel.id).where(
+                        SessionModel.campaign_id == context.current_campaign_id,
+                        SessionModel.status == "ACTIVE",
+                    )
+                )
+                if active_session is not None:
+                    raise CampaignHasActiveSessionError(
+                        "The current campaign has an active session. "
+                        "End the session before switching campaigns."
+                    )
             self._set_context(session, guild_id, model, timestamp)
         return campaign
 
@@ -170,13 +193,24 @@ class CampaignStore:
             model = session.get(CampaignModel, campaign.id)
             if model is None:
                 raise CampaignNotFoundError(f"Campaign '{campaign.id}' was not found.")
+            active_session = session.scalar(
+                select(SessionModel.id).where(
+                    SessionModel.campaign_id == campaign.id,
+                    SessionModel.status == "ACTIVE",
+                )
+            )
+            if active_session is not None:
+                raise CampaignHasActiveSessionError(
+                    "The campaign has an active session. "
+                    "End the session before ending the campaign."
+                )
             model.status = "ENDED"
             model.ended_at = _now()
         return self.find(str(campaign.id))
 
     @staticmethod
     def _set_context(
-        session: Session,
+        session: OrmSession,
         guild_id: int | str,
         campaign: CampaignModel,
         timestamp: str,
@@ -192,5 +226,7 @@ class CampaignStore:
                 )
             )
         else:
+            if context.current_campaign_id != campaign.id:
+                context.current_session = None
             context.current_campaign = campaign
             context.updated_at = timestamp

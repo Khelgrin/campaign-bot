@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 from journalbot.campaigns import (
     AmbiguousCampaignError,
+    CampaignHasActiveSessionError,
     CampaignNotFoundError,
     CampaignStore,
     NoCampaignSelectedError,
@@ -86,6 +87,24 @@ def test_starting_a_campaign_replaces_only_the_guild_context(tmp_path) -> None:
     assert store.current(123).id == second.id
     assert store.current(456).id == other.id
     assert store.find(str(first.id)).status == "ACTIVE"
+
+
+def test_switching_campaign_is_rejected_with_an_active_session(tmp_path) -> None:
+    """A guild cannot leave a campaign while its session is active."""
+    from journalbot.sessions import SessionStore
+
+    database_path = tmp_path / "journalbot.sqlite3"
+    store = CampaignStore(database_path)
+    first = store.create(123, "First", None)
+    SessionStore(database_path).create(123, "Opening")
+    second = store.create(456, "Second", None)
+
+    with pytest.raises(
+        CampaignHasActiveSessionError, match="End the session before switching"
+    ):
+        store.select(123, str(second.id))
+
+    assert store.current(123).id == first.id
 
 
 def test_guild_has_one_persisted_context_row(tmp_path) -> None:
