@@ -64,22 +64,41 @@ def test_only_one_active_session_and_campaign_end_is_guarded(tmp_path) -> None:
     assert campaigns.end_current(123).status == "ENDED"
 
 
-def test_session_selection_can_switch_campaign_context(tmp_path) -> None:
-    """Selecting a session also selects its campaign."""
+def test_session_selection_cannot_switch_campaign_context(tmp_path) -> None:
+    """A session from another campaign cannot be selected."""
     path = tmp_path / "journalbot.sqlite3"
     campaigns = CampaignStore(path)
-    first = campaigns.create(123, "First", None)
+    campaigns.create(123, "First", None)
     first_session = SessionStore(path).create(123, "First session")
     campaigns.create(123, "Second", None)
     second_session = SessionStore(path).create(123, "Second session")
 
     sessions = SessionStore(path)
-    selected = sessions.select(123, str(first_session.id))
+    with pytest.raises(SessionNotFoundError):
+        sessions.select(123, f"id:{first_session.id}")
 
-    assert selected.campaign_id == first.id
-    assert campaigns.current(123).id == first.id
-    assert sessions.current(123).id == first_session.id
-    assert second_session.campaign_id != selected.campaign_id
+    assert campaigns.current(123).title == "Second"
+    assert sessions.current(123).id == second_session.id
+    assert first_session.campaign_id != second_session.campaign_id
+
+
+def test_numeric_session_selection_stays_in_current_campaign(tmp_path) -> None:
+    """A session number is resolved within the current campaign first."""
+    path = tmp_path / "journalbot.sqlite3"
+    campaigns = CampaignStore(path)
+    first = campaigns.create(123, "First", None)
+    first_session = SessionStore(path).create(123, "First session")
+    SessionStore(path).end_current(123)
+    campaigns.create(123, "Second", None)
+    second_session = SessionStore(path).create(123, "Second session")
+
+    sessions = SessionStore(path)
+    selected_by_number = sessions.select(123, "1")
+
+    assert selected_by_number.id == second_session.id
+    assert selected_by_number.campaign_id != first.id
+    with pytest.raises(SessionNotFoundError):
+        sessions.select(123, f"id:{first_session.id}")
 
 
 def test_switching_campaign_clears_session_from_previous_campaign(tmp_path) -> None:

@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import discord
 import pytest
+from discord.ext import commands
 
 from journalbot.bot import (
     COMMANDS_HELP,
@@ -143,6 +144,24 @@ def test_unrelated_commands_are_not_logged(
         run(bot.on_command(cast(Any, context)))
 
     assert "command_invoked" not in caplog.text
+
+
+def test_missing_required_parameter_explains_how_to_get_help(
+    bot: JournalBot,
+) -> None:
+    """Missing command arguments produce actionable user-facing guidance."""
+    context = MagicMock()
+    context.send = AsyncMock()
+    error = commands.MissingRequiredArgument(
+        cast(Any, SimpleNamespace(name="title", displayed_name="title"))
+    )
+
+    run(bot.on_command_error(context, error))
+
+    context.send.assert_awaited_once_with(
+        "Missing required parameter: `title`. "
+        "Use `Bot: help` for command usage."
+    )
 
 
 def test_ready_does_not_fetch_a_channel_without_configuration(

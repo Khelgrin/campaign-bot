@@ -47,7 +47,7 @@ COMMANDS_HELP = "\n".join(
         "- `!update-campaign <id or title> [title] [description]` — update metadata.",
         "- `!end-campaign` — end the selected campaign.",
         "- `!start-session [title] [description]` — create a session.",
-        "- `!use-session <id or title>` — select a session.",
+        "- `!use-session <number, id, or title>` — select a session.",
         "- `!list-session` — list sessions for the current campaign.",
         "- `!read-session <id or title>` — show session details.",
         "- `!update-session <id or title> [title] [description] [played_at]` — "
@@ -362,6 +362,18 @@ class JournalBot(commands.Bot):
             getattr(author, "id", "unknown"),
             command_text,
         )
+
+    async def on_command_error(
+        self, context: commands.Context, error: commands.CommandError
+    ) -> None:
+        """Explain missing required command parameters to the user."""
+        if isinstance(error, commands.MissingRequiredArgument):
+            await context.send(
+                f"Missing required parameter: `{error.param.name}`. "
+                "Use `Bot: help` for command usage."
+            )
+            return
+        await super().on_command_error(context, error)
 
     async def on_message(self, message: discord.Message) -> None:
         """Respond to the bot's supported text commands."""

@@ -242,7 +242,8 @@ Potential future support for multiple simultaneous campaign contexts can be adde
 * [x] `ACTIVE` campaigns have `ended_at = NULL`.
 * [x] `ENDED` campaigns have a non-null `ended_at`.
 * [x] A Discord guild can have zero or one current campaign.
-* [x] `!use-campaign` changes the persistent current campaign.
+* [x] `!use-campaign` changes the persistent current campaign unless the
+  currently selected campaign has an active session.
 * [x] `!start-campaign` automatically selects the newly created campaign.
 * [x] Campaign context survives bot restart.
 * [ ] Child-object commands automatically use the current campaign.

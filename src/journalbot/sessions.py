@@ -181,35 +181,49 @@ class SessionStore:
         return _session(models[0])
 
     def select(self, guild_id: int | str, identifier: str) -> Session:
-        """Select a session and make its campaign current."""
+        """Select a session within the guild's current campaign."""
         with self.session_factory.begin() as session:
             context = session.get(ServerContextModel, str(guild_id))
+            if context is None or context.current_campaign_id is None:
+                raise NoCampaignSelectedError(
+                    "No campaign is currently selected. "
+                    "Use !use-campaign <id or title> first."
+                )
+            campaign_id = context.current_campaign_id
             value = identifier.strip()
-            if value.isdigit():
-                model = session.get(SessionModel, int(value))
-            else:
-                if context is None or context.current_campaign_id is None:
-                    raise NoCampaignSelectedError(
-                        "No campaign is currently selected. "
-                        "Use !use-campaign <id or title> first."
+            if value.lower().startswith("id:"):
+                raw_id = value[3:].strip()
+                model = session.scalar(
+                    select(SessionModel).where(
+                        SessionModel.id == int(raw_id),
+                        SessionModel.campaign_id == campaign_id,
                     )
+                ) if raw_id.isdigit() else None
+            elif value.isdigit():
+                model = session.scalar(
+                    select(SessionModel).where(
+                        SessionModel.campaign_id == campaign_id,
+                        SessionModel.number == int(value),
+                    )
+                )
+                if model is None:
+                    model = session.scalar(
+                        select(SessionModel).where(
+                            SessionModel.id == int(value),
+                            SessionModel.campaign_id == campaign_id,
+                        )
+                    )
+            else:
                 model = session.scalar(
                     select(SessionModel).where(
                         SessionModel.title == value,
-                        SessionModel.campaign_id == context.current_campaign_id,
+                        SessionModel.campaign_id == campaign_id,
                     )
                 )
             if model is None:
                 raise SessionNotFoundError(
                     f"Session '{identifier}' was not found."
                 )
-            if context is None:
-                context = ServerContextModel(
-                    discord_guild_id=str(guild_id),
-                    updated_at=_now(),
-                )
-                session.add(context)
-            context.current_campaign = model.campaign
             context.current_session = model
             context.updated_at = _now()
         return _session(model)

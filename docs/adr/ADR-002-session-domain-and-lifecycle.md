@@ -111,9 +111,10 @@ current_session_id     INTEGER       FK → Session.id, NULL
 updated_at             DATETIME      NOT NULL
 ```
 
-The current session must belong to the current campaign. Selecting a session
-also establishes its campaign as the current campaign, so a command cannot
-accidentally operate on a session from another campaign.
+The current session must belong to the current campaign. Session selection is
+hard-scoped to the current campaign: selecting a session never changes the
+current campaign, and a session from another campaign cannot be selected by
+number, title, or ID.
 
 This extends ADR-001's `ServerContext`; ADR-001's campaign selection remains
 the source of truth for campaign context.
@@ -176,6 +177,11 @@ Ending a campaign is rejected while it has an active session. The active
 session must be ended explicitly first; campaign ending must not silently
 change session lifecycle data.
 
+A guild also cannot switch its current campaign while the current campaign has
+an active session. The session must be ended explicitly before selecting a
+different campaign. This prevents the persistent context from referring to a
+campaign and an active session belonging to different campaigns.
+
 An ended session remains readable and selectable. It cannot be edited in ways
 that change its lifecycle history; metadata updates remain allowed unless a
 later ADR introduces stricter journal immutability.
@@ -187,7 +193,7 @@ The proposed MVP command interface is:
 | Command | Description |
 | --- | --- |
 | `!start-session [title] [description]` | Create an active session under the current campaign and select it |
-| `!use-session <id or title>` | Select a session and make its campaign current |
+| `!use-session <number, id, or title>` | Select a session in the current campaign |
 | `!list-session` | List sessions for the current campaign with number, ID, title, and status |
 | `!read-session <id or title>` | Display complete session details |
 | `!update-session <id or title> [title] [description] [played_at]` | Update session metadata without changing its ID or number |
@@ -213,11 +219,14 @@ semantics should remain unchanged.
 Creating a session never automatically ends another active session. The
 operation is rejected instead, and the existing session must be ended first.
 
-`!use-session`, `!read-session`, and `!update-session` accept the stable
-session ID or the exact title. Title lookup is scoped to the current campaign.
-Because titles are unique within a campaign, title lookup cannot be ambiguous.
-Changing a title to one already used by another session in the same campaign
-must be rejected.
+`!use-session` accepts a session number, stable session ID, or exact title,
+but every form is hard-scoped to the current campaign. Numeric values are
+resolved as session numbers within the current campaign first, then as IDs
+within that same campaign. Use `id:<id>` when an explicit stable ID is
+required. A session from another campaign cannot be selected. Because titles
+are unique within a campaign, title lookup cannot be ambiguous. Changing a
+title to one already used by another session in the same campaign must be
+rejected.
 
 `!list-session` and `!read-session` may inspect ended sessions. Listing without
 a current campaign is an error rather than a global search.
@@ -231,6 +240,27 @@ active session:
 ```text
 The campaign has an active session. End the session before ending the campaign.
 ```
+
+`!use-campaign` must reject switching to another campaign when the currently
+selected campaign has an active session:
+
+```text
+The current campaign has an active session. End the session before switching campaigns.
+```
+
+The current campaign and session context must remain unchanged after this
+rejection.
+
+Commands with required parameters must provide an explicit user-facing error
+when a parameter is omitted:
+
+```text
+Missing required parameter: `<parameter>`. Use `Bot: help` for command usage.
+```
+
+This applies to campaign and session commands handled by the bot. The help
+instruction is included so users can discover the required command syntax
+without consulting external documentation.
 
 ## 8. Domain Operations
 
@@ -283,11 +313,13 @@ be designed separately and linked to `session_id`.
 * [x] Active sessions have no `ended_at`; ended sessions have an `ended_at`.
 * [x] A campaign cannot have more than one active session.
 * [x] A campaign cannot be ended while it has an active session.
+* [x] A campaign cannot be switched while it has an active session.
 * [x] A session cannot be created without a selected campaign.
 * [x] A session cannot be created under an ended campaign.
 * [x] Creating a session selects it persistently for the guild.
 * [x] Session selection persists after a bot restart.
-* [x] Selecting a session also selects its campaign.
+* [x] Session selection is hard-scoped to the current campaign and never
+  changes campaign context.
 * [x] Session listing and reading are scoped to the current campaign.
 * [x] Ending a session preserves its record and historical timestamps.
 * [x] `played_at` defaults to creation time and can be corrected later.
@@ -299,3 +331,7 @@ be designed separately and linked to `session_id`.
 * Ending a campaign is rejected while it has an active session.
 * Starting a session is rejected when the campaign already has an active
   session.
+* Switching campaigns is rejected while the current campaign has an active
+  session.
+* Missing required campaign or session command parameters produce an
+  actionable error directing users to `Bot: help`.
