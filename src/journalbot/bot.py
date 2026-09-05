@@ -2,9 +2,17 @@
 
 import logging
 import os
+from typing import Any
 
 import discord
 from discord.ext import commands
+
+from journalbot.campaigns import (
+    CampaignError,
+    CampaignStore,
+    NoCampaignSelectedError,
+)
+from journalbot.database import get_database_path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -13,8 +21,131 @@ COMMANDS_HELP = "\n".join(
         "Available commands:",
         "- `Bot: describe` — describe JournalBot's purpose.",
         "- `Bot: help` or `Bot: commands` — show this command list.",
+        "- `!start-campaign <title> [description]` — create a campaign.",
+        "- `!use-campaign <id or title>` — select a campaign.",
+        "- `!list-campaign` — list campaigns.",
+        "- `!read-campaign <id or title>` — show campaign details.",
+        "- `!update-campaign <id or title> [title] [description]` — update metadata.",
+        "- `!end-campaign` — end the selected campaign.",
     )
 )
+
+
+class CampaignCommands(commands.Cog):
+    """Discord commands for campaign lifecycle and guild context."""
+
+    def __init__(self, store: CampaignStore) -> None:
+        self.store = store
+
+    async def _require_guild(self, ctx: commands.Context) -> int | None:
+        if ctx.guild is None:
+            await ctx.send("Campaign commands can only be used in a Discord server.")
+            return None
+        return ctx.guild.id
+
+    @commands.command(name="start-campaign")
+    async def start_campaign(
+        self, ctx: commands.Context, title: str, *, description: str = ""
+    ) -> None:
+        """Create and select a campaign."""
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        try:
+            campaign = self.store.create(guild_id, title, description)
+        except (CampaignError, ValueError) as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(
+            f"Campaign **{campaign.title}** created and selected "
+            f"(ID: {campaign.id})."
+        )
+
+    @commands.command(name="use-campaign")
+    async def use_campaign(
+        self, ctx: commands.Context, *, identifier: str
+    ) -> None:
+        """Select a campaign by ID or exact title."""
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        try:
+            campaign = self.store.select(guild_id, identifier)
+        except CampaignError as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(
+            f"Selected campaign **{campaign.title}** (ID: {campaign.id})."
+        )
+
+    @commands.command(name="list-campaign")
+    async def list_campaign(self, ctx: commands.Context) -> None:
+        """List all campaigns."""
+        campaigns = self.store.list()
+        if not campaigns:
+            await ctx.send("No campaigns exist yet.")
+            return
+        selected_id = None
+        if ctx.guild is not None:
+            try:
+                selected_id = self.store.current(ctx.guild.id).id
+            except NoCampaignSelectedError:
+                pass
+        lines = [
+            f"{'* ' if campaign.id == selected_id else ''}{campaign.id}: "
+            f"{campaign.title} [{campaign.status}]"
+            for campaign in campaigns
+        ]
+        await ctx.send("\n".join(lines))
+
+    @commands.command(name="read-campaign")
+    async def read_campaign(
+        self, ctx: commands.Context, *, identifier: str
+    ) -> None:
+        """Display campaign details."""
+        try:
+            campaign = self.store.find(identifier)
+        except CampaignError as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(
+            f"ID: {campaign.id}\nTitle: {campaign.title}\n"
+            f"Description: {campaign.description or '(none)'}\n"
+            f"Status: {campaign.status}\nCreated at: {campaign.created_at}\n"
+            f"Ended at: {campaign.ended_at or '(ongoing)'}"
+        )
+
+    @commands.command(name="update-campaign")
+    async def update_campaign(
+        self,
+        ctx: commands.Context,
+        identifier: str,
+        title: str | None = None,
+        *,
+        description: str | None = None,
+    ) -> None:
+        """Update campaign title and/or description."""
+        try:
+            campaign = self.store.update(identifier, title, description)
+        except (CampaignError, ValueError) as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(
+            f"Campaign updated: **{campaign.title}** (ID: {campaign.id})."
+        )
+
+    @commands.command(name="end-campaign")
+    async def end_campaign(self, ctx: commands.Context) -> None:
+        """End the current campaign."""
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        try:
+            campaign = self.store.end_current(guild_id)
+        except CampaignError as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(f"Campaign **{campaign.title}** ended.")
 
 
 class JournalBot(commands.Bot):
@@ -22,8 +153,15 @@ class JournalBot(commands.Bot):
 
     _ready_announcement_sent: bool = False
 
+    def __init__(
+        self, *args: Any, database_path: str | None = None, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.campaigns = CampaignStore(database_path or get_database_path())
+
     async def setup_hook(self) -> None:
         """Run one-time asynchronous setup before the bot connects."""
+        await self.add_cog(CampaignCommands(self.campaigns))
         LOGGER.info("JournalBot setup complete")
 
     async def on_ready(self) -> None:
