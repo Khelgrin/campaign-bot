@@ -91,7 +91,7 @@ Campaign
 ### Creating a campaign
 
 ```text
-!start-campaign <title> <description>
+!start-campaign title="..." [description="..."]
 ```
 
 Creates:
@@ -109,7 +109,7 @@ An existing campaign is **not automatically ended**.
 ### Selecting a campaign
 
 ```text
-!use-campaign <id/title>
+!use-campaign <identifier>
 ```
 
 Updates:
@@ -138,11 +138,11 @@ The campaign remains in the database and can still be read.
 
 | Command                                             | Description                                          |
 | --------------------------------------------------- | ---------------------------------------------------- |
-| `!start-campaign <title> <description>`             | Creates a campaign and makes it the current campaign |
-| `!use-campaign <id/title>`                          | Selects the campaign as the current guild context    |
+| `!start-campaign title="..." [description="..."]`   | Creates a campaign and makes it the current campaign |
+| `!use-campaign <identifier>`                       | Selects the campaign as the current guild context    |
 | `!list-campaign`                                    | Lists all campaigns with ID, title and status        |
-| `!read-campaign <id/title>`                         | Displays campaign details                            |
-| `!update-campaign <id/title> [title] [description]` | Updates campaign metadata                            |
+| `!read-campaign <identifier>`                      | Displays campaign details                            |
+| `!update-campaign <identifier> [title="..."] [description="..."]` | Updates campaign metadata |
 | `!end-campaign`                                     | Marks the current campaign as `ENDED`                |
 
 The MVP does not include:

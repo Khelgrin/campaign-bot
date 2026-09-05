@@ -125,13 +125,43 @@ Campaign IDs must remain stable even if the campaign title changes.
 The MVP Campaign interface consists of:
 
 ```text
-!start-campaign <title> <description>
-!use-campaign <id/title>
+!start-campaign title="..." [description="..."]
+!use-campaign <identifier>
 !list-campaign
-!read-campaign <id/title>
-!update-campaign <id/title> [title] [description]
+!read-campaign <identifier>
+!update-campaign <identifier> [title="..."] [description="..."]
 !end-campaign
 ```
+
+## Command Argument Syntax
+
+All commands use named parameters so values containing spaces, commas, or
+other punctuation are unambiguous.
+
+Both forms are supported:
+
+```text
+title="Find the missing merchant"
+--title "Find the missing merchant"
+```
+
+The assignment form and the double-dash form may be mixed in one command.
+Quoted values are required when a value contains whitespace. The only
+positional parameter is an optional command identifier, which must be first;
+all metadata and filter parameters remain named.
+
+Examples:
+
+```text
+!start-campaign title="Kingmaker" description="Stolen land"
+!use-campaign "Kingmaker"
+!update-campaign 42 title="New title"
+```
+
+Command parameters are parsed by name. Unknown, duplicated, malformed, or
+unexpected positional parameters must be rejected with a usage error. A
+parameter omitted from an update is left unchanged; an explicitly supplied
+empty value clears nullable metadata where supported.
 
 ## `!start-campaign`
 
@@ -291,11 +321,12 @@ is rejected if the campaign already has an active session.
 ## Session Commands
 
 ```text
-!start-session [title] [description]
-!use-session <id/title>
+!start-session [title="..."] [description="..."]
+!use-session <identifier>
 !list-session
-!read-session <id/title>
-!update-session <id/title> [title] [description] [played_at]
+!read-session <identifier>
+!update-session <identifier> [title="..."] [description="..."]
+    [played_at="..."]
 !end-session
 ```
 
@@ -325,7 +356,7 @@ Example:
 ```text
 !use-campaign 42
 
-!new-quest "Find the Witch" "Investigate the strange events..."
+!create-quest title="Find the Witch" description="Investigate the strange events..."
 ```
 
 The second command must result in:
@@ -550,7 +581,7 @@ Makefile:
 
 ```text
 make lint
-make test
+make coverage-check
 ```
 
 Run `make install-deps` first only when dependencies are missing or need to be
@@ -559,9 +590,147 @@ the Discord bot.
 
 ---
 
+# QA Engineering Guide
+
+This section describes how agents acting as QA engineers should verify feature
+implementation, check test coverage, and report findings.
+
+## QA scope
+
+QA work must be scoped to the currently implemented feature and the relevant ADRs.
+Do not evaluate a feature against future ADRs or future product concepts unless
+those items are explicitly in scope for the task.
+
+When verifying an implementation:
+
+* read the relevant ADR or product requirement first,
+* inspect the actual implementation in the relevant source files,
+* confirm that all in-scope acceptance criteria are implemented,
+* confirm that the behaviors are actually tested,
+* report only what is implemented, missing, or untested.
+
+Ignore speculative future objects such as recording, transcription, AI-generated
+summaries, Roll20 integration, or permissions unless a specific task requests
+that scope.
+
+## Verification approach
+
+1. Inspect the feature contract.
+   - Identify the relevant ADR and command/object requirements.
+   - Check lifecycle rules, persistence rules, context resolution, and user-facing behavior.
+2. Inspect the implementation.
+   - Review the domain model, repository/store logic, and bot command integration.
+   - Confirm whether the feature matches the described contract.
+3. Inspect test coverage.
+   - Check whether each required behavior has a test asserting it.
+   - Look for missing scenarios such as edge cases, invalid inputs, context errors, and lifecycle transitions.
+4. Validate the repository.
+   - Run the smallest relevant test subset when possible.
+   - Run the required project verification commands when needed.
+5. Write the report.
+   - State clearly what is implemented, missing, and untested.
+   - Base claims on evidence from code and test execution.
+
+## What counts as implemented
+
+A feature is considered implemented only when:
+
+* the behavior exists in the code,
+* the relevant ADR acceptance criteria are satisfied,
+* the expected domain rules are enforced,
+* users can exercise the feature through the correct command/API flow,
+* the behavior is exercised by tests.
+
+## What counts as not implemented
+
+A feature is not implemented when:
+
+* the relevant object, command, or lifecycle rule is absent,
+* the implementation only partially matches the requirement,
+* the design is described in a later ADR and therefore intentionally out of scope,
+* a required acceptance criterion is missing from the code.
+
+## Test coverage expectations
+
+QA should verify both implementation and tests.
+
+A requirement is considered covered by tests when there is a test asserting the expected behavior.
+Examples of important scenarios:
+
+* lifecycle transitions,
+* invalid inputs,
+* missing campaign/session context,
+* ambiguous resolution,
+* campaign-scoped lookup,
+* persistence and integrity constraints,
+* command parsing for named and positional arguments,
+* user-visible output for command results.
+
+If a scenario is not explicitly tested, report it as untested.
+
+## Report guidelines
+
+Reports must be concise, evidence-based, and scoped.
+
+A QA report should include:
+
+* feature or ADR under review,
+* implementation status,
+* implemented acceptance criteria,
+* missing acceptance criteria,
+* test coverage status,
+* verification commands run and results.
+
+### Reporting format
+
+Use direct statements such as:
+
+* "Implemented: ..."
+* "Not implemented: ..."
+* "Covered by tests: ..."
+* "Not covered by tests: ..."
+* "Validation: `make coverage-check` passed; `make lint` passed."
+
+### Important rule
+
+Do not include future or unrelated ADRs in the report unless the task explicitly
+asks for them. For example, a Quest review should not claim future
+`QuestProgress` or `JournalEvent` objects are required unless they are part of the
+currently reviewed scope.
+
+## Verification commands
+
+Use the repository verification commands defined in the Makefile:
+
+```text
+make lint
+make coverage-check
+```
+
+Run `make install-deps` first only when dependencies are missing or need to be restored.
+
+Do not use `make run`, because it starts the Discord bot.
+
+## Example QA summary
+
+```text
+Implemented: Quest lifecycle and campaign-context handling.
+Not implemented: QuestProgress history model and progress-quest command, because they are described in a later ADR and are outside the reviewed scope.
+Covered by tests: creation, status transitions, campaign scoping, ambiguity checks.
+Not covered by tests: bot command-level parsing for positional update identifiers.
+Validation: `make coverage-check` passed; `make lint` passed.
+```
+
+## Final QA rule
+
+QA engineering is based on evidence. Verify the contract, verify the tests, and
+report the current state precisely without guessing or expanding scope.
+
+---
+
 # Current Status
 
-The following decisions are already accepted:
+The following decisions are already accepted and implemented in the codebase:
 
 ```text
 Campaign:
@@ -572,13 +741,28 @@ Campaign:
     ✓ Persistent guild-level context defined
 
 Session:
-    ◐ Proposed in ADR-002
+    ✓ Defined in ADR-002
+    ✓ Database schema defined
+    ✓ Lifecycle defined
+    ✓ Commands defined
+    ✓ Persistent guild-level context handling implemented
 
 Quest:
-    ☐ Not yet designed
+    ✓ Defined in ADR-003
+    ✓ Database schema defined
+    ✓ Lifecycle defined
+    ✓ Commands defined
+    ✓ Campaign and session context resolution implemented
+    ✓ Validation and invariants implemented
+
+QuestProgress:
+    ✓ Defined in ADR-004
+    ✓ Domain model is planned/represented in the ADR and future scope
+    ⚠ Not yet implemented in the application code
 
 Journal events:
-    ☐ Not yet designed
+    ✓ Defined in ADR-005
+    ⚠ Not yet implemented in the application code
 
 Recording:
     ☐ Future
@@ -593,5 +777,22 @@ Permissions:
     ☐ Post-MVP
 ```
 
-The next design task is to accept ADR-002 and implement the Session domain
-object, persistence, context handling, and commands.
+The project has reached a mature Phase 1 baseline for Campaign, Session, and Quest.
+The remaining implemented-in-ADR-but-not-yet-in-code items are future domain
+extensions that should be treated as out of scope for current QA verification
+unless explicitly requested.
+
+## Maintaining Current Status
+
+Whenever a new feature is implemented and verified:
+
+* update this section in the same change or immediately after verification,
+* reflect the feature's actual implementation state,
+* distinguish between ADR-defined, implemented, tested, and future work,
+* update the relevant domain's checklist and the summary below it,
+* do not mark a feature as implemented until its required acceptance criteria
+  and tests have been verified.
+
+When a feature is only partially implemented, record the partial state and
+identify the remaining gap rather than marking it complete. Keep this section
+consistent with the codebase, ADRs, and test suite.
