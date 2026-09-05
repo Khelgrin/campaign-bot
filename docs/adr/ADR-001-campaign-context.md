@@ -91,7 +91,7 @@ Campaign
 ### Creating a campaign
 
 ```text
-/start-campaign <title> <description>
+!start-campaign <title> <description>
 ```
 
 Creates:
@@ -109,7 +109,7 @@ An existing campaign is **not automatically ended**.
 ### Selecting a campaign
 
 ```text
-/use-campaign <id/title>
+!use-campaign <id/title>
 ```
 
 Updates:
@@ -122,7 +122,7 @@ ServerContext.updated_at = now()
 ### Ending a campaign
 
 ```text
-/end-campaign
+!end-campaign
 ```
 
 Updates:
@@ -138,18 +138,18 @@ The campaign remains in the database and can still be read.
 
 | Command                                             | Description                                          |
 | --------------------------------------------------- | ---------------------------------------------------- |
-| `/start-campaign <title> <description>`             | Creates a campaign and makes it the current campaign |
-| `/use-campaign <id/title>`                          | Selects the campaign as the current guild context    |
-| `/list-campaign`                                    | Lists all campaigns with ID, title and status        |
-| `/read-campaign <id/title>`                         | Displays campaign details                            |
-| `/update-campaign <id/title> [title] [description]` | Updates campaign metadata                            |
-| `/end-campaign`                                     | Marks the current campaign as `ENDED`                |
+| `!start-campaign <title> <description>`             | Creates a campaign and makes it the current campaign |
+| `!use-campaign <id/title>`                          | Selects the campaign as the current guild context    |
+| `!list-campaign`                                    | Lists all campaigns with ID, title and status        |
+| `!read-campaign <id/title>`                         | Displays campaign details                            |
+| `!update-campaign <id/title> [title] [description]` | Updates campaign metadata                            |
+| `!end-campaign`                                     | Marks the current campaign as `ENDED`                |
 
 The MVP does not include:
 
 ```text
-/delete-campaign
-/reopen-campaign
+!delete-campaign
+!reopen-campaign
 ```
 
 ## 5. Context Resolution
@@ -159,7 +159,7 @@ Commands operating on child objects resolve their campaign through `ServerContex
 Example:
 
 ```text
-/new-quest "Find the Witch" "Investigate the strange events..."
+!new-quest "Find the Witch" "Investigate the strange events..."
 ```
 
 Resolution:
@@ -192,7 +192,7 @@ Example response:
 
 ```text
 No campaign is currently selected.
-Use /use-campaign <id> first.
+Use !use-campaign <id> first.
 ```
 
 The bot must not guess or implicitly select a campaign.
@@ -242,8 +242,8 @@ Potential future support for multiple simultaneous campaign contexts can be adde
 * [x] `ACTIVE` campaigns have `ended_at = NULL`.
 * [x] `ENDED` campaigns have a non-null `ended_at`.
 * [x] A Discord guild can have zero or one current campaign.
-* [x] `/use-campaign` changes the persistent current campaign.
-* [x] `/start-campaign` automatically selects the newly created campaign.
+* [x] `!use-campaign` changes the persistent current campaign.
+* [x] `!start-campaign` automatically selects the newly created campaign.
 * [x] Campaign context survives bot restart.
 * [ ] Child-object commands automatically use the current campaign.
 * [x] Commands requiring campaign context fail when no campaign is selected.

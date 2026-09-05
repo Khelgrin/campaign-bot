@@ -13,6 +13,7 @@ from journalbot.campaigns import (
     NoCampaignSelectedError,
 )
 from journalbot.database import get_database_path
+from journalbot.sessions import SessionError, SessionStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +28,13 @@ COMMANDS_HELP = "\n".join(
         "- `!read-campaign <id or title>` — show campaign details.",
         "- `!update-campaign <id or title> [title] [description]` — update metadata.",
         "- `!end-campaign` — end the selected campaign.",
+        "- `!start-session [title] [description]` — create a session.",
+        "- `!use-session <id or title>` — select a session.",
+        "- `!list-session` — list sessions for the current campaign.",
+        "- `!read-session <id or title>` — show session details.",
+        "- `!update-session <id or title> [title] [description] [played_at]` — "
+        "update session metadata.",
+        "- `!end-session` — end the selected session.",
     )
 )
 
@@ -36,6 +44,7 @@ class CampaignCommands(commands.Cog):
 
     def __init__(self, store: CampaignStore) -> None:
         self.store = store
+        self.sessions = SessionStore(store.database_path)
 
     async def _require_guild(self, ctx: commands.Context) -> int | None:
         if ctx.guild is None:
@@ -146,6 +155,129 @@ class CampaignCommands(commands.Cog):
             await ctx.send(str(error))
             return
         await ctx.send(f"Campaign **{campaign.title}** ended.")
+
+    @commands.command(name="start-session")
+    async def start_session(
+        self, ctx: commands.Context, title: str | None = None, *,
+        description: str = ""
+    ) -> None:
+        """Create and select a session for the current campaign."""
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        try:
+            session = self.sessions.create(guild_id, title, description)
+        except (CampaignError, SessionError, ValueError) as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(
+            f"Session **{session.title}** created and selected "
+            f"(ID: {session.id}, number: {session.number})."
+        )
+
+    @commands.command(name="use-session")
+    async def use_session(self, ctx: commands.Context, *, identifier: str) -> None:
+        """Select a session by ID or exact title."""
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        try:
+            session = self.sessions.select(guild_id, identifier)
+        except SessionError as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(
+            f"Selected session **{session.title}** "
+            f"(ID: {session.id}, number: {session.number})."
+        )
+
+    @commands.command(name="list-session")
+    async def list_session(self, ctx: commands.Context) -> None:
+        """List sessions for the current campaign."""
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        try:
+            sessions = self.sessions.list_current_campaign(guild_id)
+        except (CampaignError, SessionError) as error:
+            await ctx.send(str(error))
+            return
+        if not sessions:
+            await ctx.send("No sessions exist for the current campaign.")
+            return
+        try:
+            selected_id = self.sessions.current(guild_id).id
+        except SessionError:
+            selected_id = None
+        await ctx.send(
+            "\n".join(
+                f"{'* ' if item.id == selected_id else ''}{item.number}: "
+                f"{item.title} (ID: {item.id}) [{item.status}]"
+                for item in sessions
+            )
+        )
+
+    @commands.command(name="read-session")
+    async def read_session(
+        self, ctx: commands.Context, *, identifier: str
+    ) -> None:
+        """Display session details from the current campaign."""
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        try:
+            campaign_id = self.store.current(guild_id).id
+            session = self.sessions.find(identifier, campaign_id)
+        except (CampaignError, SessionError) as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(
+            f"ID: {session.id}\nCampaign ID: {session.campaign_id}\n"
+            f"Number: {session.number}\nTitle: {session.title}\n"
+            f"Description: {session.description or '(none)'}\n"
+            f"Status: {session.status}\nCreated at: {session.created_at}\n"
+            f"Played at: {session.played_at}\n"
+            f"Ended at: {session.ended_at or '(ongoing)'}"
+        )
+
+    @commands.command(name="update-session")
+    async def update_session(
+        self,
+        ctx: commands.Context,
+        identifier: str,
+        title: str | None = None,
+        *,
+        description: str | None = None,
+        played_at: str | None = None,
+    ) -> None:
+        """Update session metadata."""
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        try:
+            session = self.sessions.update(
+                guild_id, identifier, title, description, played_at
+            )
+        except (SessionError, ValueError) as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(
+            f"Session updated: **{session.title}** "
+            f"(ID: {session.id}, number: {session.number})."
+        )
+
+    @commands.command(name="end-session")
+    async def end_session(self, ctx: commands.Context) -> None:
+        """End the current session."""
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        try:
+            session = self.sessions.end_current(guild_id)
+        except SessionError as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(f"Session **{session.title}** ended.")
 
 
 class JournalBot(commands.Bot):

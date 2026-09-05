@@ -238,6 +238,82 @@ def test_campaign_commands_cover_lifecycle_and_guild_context(tmp_path) -> None:
     )
 
 
+def test_session_commands_cover_lifecycle_and_context(tmp_path) -> None:
+    """Session commands expose creation, inspection, updates, and ending."""
+    cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
+    ctx = MagicMock()
+    ctx.guild = SimpleNamespace(id=123)
+    ctx.send = AsyncMock()
+
+    run(
+        cast(Any, cog.start_campaign.callback)(
+            cog, ctx, "Kingmaker", description="Stolen land"
+        )
+    )
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.start_session.callback)(
+            cog, ctx, "Opening", description="The party arrives"
+        )
+    )
+    session = cog.sessions.current(123)
+    ctx.send.assert_awaited_once_with(
+        f"Session **Opening** created and selected "
+        f"(ID: {session.id}, number: {session.number})."
+    )
+
+    ctx.send.reset_mock()
+    run(cast(Any, cog.list_session.callback)(cog, ctx))
+    assert f"* 1: Opening (ID: {session.id}) [ACTIVE]" in (
+        ctx.send.await_args.args[0]
+    )
+
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.read_session.callback)(
+            cog, ctx, identifier=str(session.id)
+        )
+    )
+    read_response = ctx.send.await_args.args[0]
+    assert f"ID: {session.id}" in read_response
+    assert "Title: Opening" in read_response
+    assert "Description: The party arrives" in read_response
+    assert "Status: ACTIVE" in read_response
+
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.update_session.callback)(
+            cog,
+            ctx,
+            str(session.id),
+            "Revised opening",
+            description="Updated notes",
+            played_at="2026-09-05T18:00:00+00:00",
+        )
+    )
+    updated = cog.sessions.find(str(session.id), session.campaign_id)
+    assert updated.title == "Revised opening"
+    assert updated.description == "Updated notes"
+    assert updated.played_at == "2026-09-05T18:00:00+00:00"
+
+    ctx.send.reset_mock()
+    run(cast(Any, cog.end_session.callback)(cog, ctx))
+    ended = cog.sessions.current(123)
+    assert ended.status == "ENDED"
+    ctx.send.assert_awaited_once_with("Session **Revised opening** ended.")
+
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.use_session.callback)(
+            cog, ctx, identifier="Revised opening"
+        )
+    )
+    ctx.send.assert_awaited_once_with(
+        f"Selected session **Revised opening** "
+        f"(ID: {session.id}, number: {session.number})."
+    )
+
+
 def test_campaign_commands_reject_direct_messages(tmp_path) -> None:
     """Campaign lifecycle commands require a Discord guild context."""
     cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))

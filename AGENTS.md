@@ -63,17 +63,13 @@ The journal is organized around a campaign:
 Discord Guild
     │
     └── ServerContext
+            ├── current_campaign_id ──► Campaign
+            │                              │
+            │                              ├── Session[]
+            │                              ├── Quest[]
+            │                              └── future journal objects
             │
-            └── current_campaign_id
-                    │
-                    ▼
-                 Campaign
-                    │
-                    ├── Session[]
-                    │
-                    ├── Quest[]
-                    │
-                    └── future journal objects
+            └── current_session_id ───► Session
 ```
 
 `Campaign` is currently the highest-level domain object.
@@ -129,15 +125,15 @@ Campaign IDs must remain stable even if the campaign title changes.
 The MVP Campaign interface consists of:
 
 ```text
-/start-campaign <title> <description>
-/use-campaign <id/title>
-/list-campaign
-/read-campaign <id/title>
-/update-campaign <id/title> [title] [description]
-/end-campaign
+!start-campaign <title> <description>
+!use-campaign <id/title>
+!list-campaign
+!read-campaign <id/title>
+!update-campaign <id/title> [title] [description]
+!end-campaign
 ```
 
-## `/start-campaign`
+## `!start-campaign`
 
 Creates a new Campaign.
 
@@ -145,13 +141,13 @@ The newly created campaign becomes the current campaign for the Discord guild.
 
 Creating a new campaign does NOT automatically end an existing campaign.
 
-## `/use-campaign`
+## `!use-campaign`
 
 Selects a campaign as the current campaign context for the Discord guild.
 
 The campaign may be identified by ID or title.
 
-## `/list-campaign`
+## `!list-campaign`
 
 Lists available campaigns with at least:
 
@@ -163,7 +159,7 @@ Status
 
 The currently selected campaign should ideally be visually identifiable.
 
-## `/read-campaign`
+## `!read-campaign`
 
 Displays campaign details.
 
@@ -180,7 +176,7 @@ Ended at
 
 Future versions may add aggregate information such as session and quest counts.
 
-## `/update-campaign`
+## `!update-campaign`
 
 Updates campaign metadata.
 
@@ -193,7 +189,7 @@ description
 
 Updating a campaign must not change its ID.
 
-## `/end-campaign`
+## `!end-campaign`
 
 Ends the currently selected campaign.
 
@@ -205,6 +201,9 @@ ended_at = current timestamp
 ```
 
 Ending a campaign does not delete its data.
+
+A campaign cannot be ended while it has an active session. The session must be
+ended explicitly first.
 
 ---
 
@@ -221,6 +220,7 @@ Use a `ServerContext` concept/table.
 ```text
 discord_guild_id
 current_campaign_id
+current_session_id
 updated_at
 ```
 
@@ -228,9 +228,11 @@ Relationship:
 
 ```text
 ServerContext.current_campaign_id → Campaign.id
+ServerContext.current_session_id → Session.id
 ```
 
 `current_campaign_id` may be `NULL`.
+`current_session_id` may be `NULL`.
 
 The context is scoped to the Discord guild.
 
@@ -242,6 +244,78 @@ Do not implement user-specific or channel-specific campaign contexts.
 
 ---
 
+# Session
+
+A Session represents one RPG meeting and belongs to exactly one Campaign.
+Session data is persistent and must use the existing ORM.
+
+## Session fields
+
+```text
+id
+campaign_id
+number
+title
+description
+status
+created_at
+played_at
+ended_at
+```
+
+### Field semantics
+
+* `id` — immutable unique identifier.
+* `campaign_id` — required foreign key to Campaign.
+* `number` — positive number unique within the campaign.
+* `title` — required after creation; generated as `Session <number>` when omitted.
+* `description` — optional free-form description of what happened during the session.
+* `status` — `ACTIVE` or `ENDED`.
+* `created_at` — timestamp when the session record was created.
+* `played_at` — actual RPG session date/time; defaults to `created_at` and can be corrected later.
+* `ended_at` — timestamp when the session was ended; `NULL` while active.
+
+Integrity rules:
+
+```text
+ACTIVE → ended_at IS NULL
+ENDED  → ended_at IS NOT NULL
+UNIQUE (campaign_id, number)
+UNIQUE (campaign_id, title)
+At most one ACTIVE session per campaign
+```
+
+There must never be two active sessions in one campaign. Starting a session
+is rejected if the campaign already has an active session.
+
+## Session Commands
+
+```text
+!start-session [title] [description]
+!use-session <id/title>
+!list-session
+!read-session <id/title>
+!update-session <id/title> [title] [description] [played_at]
+!end-session
+```
+
+Session creation requires the current campaign context, and the campaign must
+be active. Creating a session selects it as the current session for the guild.
+
+Existing sessions can be read, selected, and updated by stable ID or exact
+title. Title lookup is scoped to the current campaign and titles must be unique
+within that campaign. Session numbers are display-only and are not lookup
+identifiers.
+
+Ending a session preserves its data. An ended session can still be read and
+selected. Ending a campaign is rejected while any session in that campaign is
+active.
+
+Session context is guild-scoped and shared by all users on the guild. Selecting
+a session also selects its campaign.
+
+---
+
 # Context Resolution
 
 Commands operating on child objects should resolve their campaign from the current guild context.
@@ -249,9 +323,9 @@ Commands operating on child objects should resolve their campaign from the curre
 Example:
 
 ```text
-/use-campaign 42
+!use-campaign 42
 
-/new-quest "Find the Witch" "Investigate the strange events..."
+!new-quest "Find the Witch" "Investigate the strange events..."
 ```
 
 The second command must result in:
@@ -261,6 +335,21 @@ Quest.campaign_id = 42
 ```
 
 The user should not have to specify `campaign_id` for every child-object command.
+
+Session-dependent commands add one more resolution step:
+
+```text
+Discord guild ID
+    ↓
+ServerContext.current_session_id
+    ↓
+Session
+    ↓
+create/update session child object
+```
+
+Selecting a session also selects its campaign. A session must always belong to
+the campaign stored in the guild context.
 
 The expected resolution flow is:
 
@@ -292,10 +381,31 @@ Example:
 
 ```text
 No campaign is currently selected.
-Use /use-campaign <id> first.
+Use !use-campaign <id> first.
 ```
 
 The bot must never guess which campaign the user intended.
+
+---
+
+# Missing Session Context
+
+If:
+
+```text
+ServerContext.current_session_id = NULL
+```
+
+a command requiring a current session must fail clearly.
+
+Example:
+
+```text
+No session is currently selected.
+Use !use-session <id or title> first.
+```
+
+The bot must never guess which session the user intended.
 
 ---
 
@@ -312,8 +422,8 @@ It can still be:
 The MVP does not require:
 
 ```text
-/delete-campaign
-/reopen-campaign
+!delete-campaign
+!reopen-campaign
 ```
 
 Do not implement these unless explicitly requested.
@@ -424,12 +534,14 @@ When making a decision that contradicts an existing ADR, do not silently overrid
 4. Keep IDs stable and use foreign-key relationships between domain objects.
 5. Keep Discord-specific context separate from domain objects where practical.
 6. Do not use in-memory state as the source of truth for persistent application state.
-7. Do not implement permissions yet.
-8. Do not implement recording/transcription/AI/Roll20 functionality yet.
-9. Preserve historical journal information where it has future analytical value.
-10. When a requirement is ambiguous, identify the ambiguity before making a significant architectural decision.
-11. Treat ADRs as project-level architectural decisions.
-12. Avoid speculative abstractions that exist only for possible future features.
+7. Use the existing ORM for database interactions; keep handwritten SQL to the
+   minimum necessary.
+8. Do not implement permissions yet.
+9. Do not implement recording/transcription/AI/Roll20 functionality yet.
+10. Preserve historical journal information where it has future analytical value.
+11. When a requirement is ambiguous, identify the ambiguity before making a significant architectural decision.
+12. Treat ADRs as project-level architectural decisions.
+13. Avoid speculative abstractions that exist only for possible future features.
 
 ## Verification
 
@@ -460,7 +572,7 @@ Campaign:
     ✓ Persistent guild-level context defined
 
 Session:
-    ☐ Not yet designed
+    ◐ Proposed in ADR-002
 
 Quest:
     ☐ Not yet designed
@@ -481,4 +593,5 @@ Permissions:
     ☐ Post-MVP
 ```
 
-The next design task is to define the `Session` domain object and its relationship to `Campaign`.
+The next design task is to accept ADR-002 and implement the Session domain
+object, persistence, context handling, and commands.

@@ -1,6 +1,6 @@
 # ADR-002: Session Domain and Lifecycle
 
-**Status:** Proposed
+**Status:** Accepted
 **Scope:** MVP
 **Related Objects:** `Campaign`, `ServerContext`
 
@@ -275,24 +275,24 @@ be designed separately and linked to `session_id`.
 
 ## 10. Acceptance Criteria
 
-* [ ] A session belongs to exactly one campaign through a required foreign key.
-* [ ] Session IDs remain stable when metadata changes.
-* [ ] Session numbers are positive and unique within a campaign.
-* [ ] Session titles are non-empty and unique within a campaign.
-* [ ] Session lifecycle is enforced as `ACTIVE` or `ENDED`.
-* [ ] Active sessions have no `ended_at`; ended sessions have an `ended_at`.
-* [ ] A campaign cannot have more than one active session.
-* [ ] A campaign cannot be ended while it has an active session.
-* [ ] A session cannot be created without a selected campaign.
-* [ ] A session cannot be created under an ended campaign.
-* [ ] Creating a session selects it persistently for the guild.
-* [ ] Session selection persists after a bot restart.
-* [ ] Selecting a session also selects its campaign.
-* [ ] Session listing and reading are scoped to the current campaign.
-* [ ] Ending a session preserves its record and historical timestamps.
-* [ ] `played_at` defaults to creation time and can be corrected later.
-* [ ] Missing campaign and session context produce explicit user-facing errors.
-* [ ] No permissions or future-phase integrations are introduced.
+* [x] A session belongs to exactly one campaign through a required foreign key.
+* [x] Session IDs remain stable when metadata changes.
+* [x] Session numbers are positive and unique within a campaign.
+* [x] Session titles are non-empty and unique within a campaign.
+* [x] Session lifecycle is enforced as `ACTIVE` or `ENDED`.
+* [x] Active sessions have no `ended_at`; ended sessions have an `ended_at`.
+* [x] A campaign cannot have more than one active session.
+* [x] A campaign cannot be ended while it has an active session.
+* [x] A session cannot be created without a selected campaign.
+* [x] A session cannot be created under an ended campaign.
+* [x] Creating a session selects it persistently for the guild.
+* [x] Session selection persists after a bot restart.
+* [x] Selecting a session also selects its campaign.
+* [x] Session listing and reading are scoped to the current campaign.
+* [x] Ending a session preserves its record and historical timestamps.
+* [x] `played_at` defaults to creation time and can be corrected later.
+* [x] Missing campaign and session context produce explicit user-facing errors.
+* [x] No permissions or future-phase integrations are introduced.
 
 ## 11. Product Decisions Recorded
 
