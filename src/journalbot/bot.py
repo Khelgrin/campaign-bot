@@ -2,6 +2,7 @@
 
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Any
 
 import discord
@@ -16,6 +17,23 @@ from journalbot.database import get_database_path
 from journalbot.sessions import SessionError, SessionStore
 
 LOGGER = logging.getLogger(__name__)
+
+LOGGED_COMMANDS = frozenset(
+    {
+        "start-campaign",
+        "use-campaign",
+        "list-campaign",
+        "read-campaign",
+        "update-campaign",
+        "end-campaign",
+        "start-session",
+        "use-session",
+        "list-session",
+        "read-session",
+        "update-session",
+        "end-session",
+    }
+)
 
 COMMANDS_HELP = "\n".join(
     (
@@ -327,6 +345,23 @@ class JournalBot(commands.Bot):
             return
 
         self._ready_announcement_sent = True
+
+    async def on_command(self, context: commands.Context) -> None:
+        """Log campaign and session command invocations with their user."""
+        command = context.command
+        if command is None or command.qualified_name not in LOGGED_COMMANDS:
+            return
+
+        author = context.author
+        message = context.message
+        command_text = message.content
+        LOGGER.info(
+            "command_invoked timestamp=%s user=%s user_id=%s command=%s",
+            datetime.now(timezone.utc).isoformat(),
+            getattr(author, "name", str(author)),
+            getattr(author, "id", "unknown"),
+            command_text,
+        )
 
     async def on_message(self, message: discord.Message) -> None:
         """Respond to the bot's supported text commands."""

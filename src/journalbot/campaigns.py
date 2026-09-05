@@ -133,6 +133,23 @@ class CampaignStore:
             model = session.get(CampaignModel, campaign.id)
             if model is None:
                 raise CampaignNotFoundError(f"Campaign '{identifier}' was not found.")
+            context = session.get(ServerContextModel, str(guild_id))
+            if (
+                context is not None
+                and context.current_campaign_id is not None
+                and context.current_campaign_id != model.id
+            ):
+                active_session = session.scalar(
+                    select(SessionModel.id).where(
+                        SessionModel.campaign_id == context.current_campaign_id,
+                        SessionModel.status == "ACTIVE",
+                    )
+                )
+                if active_session is not None:
+                    raise CampaignHasActiveSessionError(
+                        "The current campaign has an active session. "
+                        "End the session before switching campaigns."
+                    )
             self._set_context(session, guild_id, model, timestamp)
         return campaign
 

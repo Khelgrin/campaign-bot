@@ -106,6 +106,45 @@ def test_other_messages_do_not_send_a_response(
     process_commands.assert_awaited_once_with(user_message)
 
 
+@pytest.mark.parametrize("command_name", ["start-campaign", "end-session"])
+def test_campaign_and_session_commands_are_logged(
+    bot: JournalBot,
+    command_name: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Lifecycle command invocations include timestamp, user, and text."""
+    context = SimpleNamespace(
+        command=SimpleNamespace(qualified_name=command_name),
+        author=SimpleNamespace(name="Tomek", id=42),
+        message=SimpleNamespace(content=f"!{command_name} details"),
+    )
+
+    with caplog.at_level("INFO", logger="journalbot.bot"):
+        run(bot.on_command(cast(Any, context)))
+
+    assert "command_invoked" in caplog.text
+    assert "user=Tomek" in caplog.text
+    assert "user_id=42" in caplog.text
+    assert f"command=!{command_name} details" in caplog.text
+    assert "timestamp=" in caplog.text
+
+
+def test_unrelated_commands_are_not_logged(
+    bot: JournalBot, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Only campaign and session commands use the invocation audit log."""
+    context = SimpleNamespace(
+        command=SimpleNamespace(qualified_name="help"),
+        author=SimpleNamespace(name="Tomek", id=42),
+        message=SimpleNamespace(content="!help"),
+    )
+
+    with caplog.at_level("INFO", logger="journalbot.bot"):
+        run(bot.on_command(cast(Any, context)))
+
+    assert "command_invoked" not in caplog.text
+
+
 def test_ready_does_not_fetch_a_channel_without_configuration(
     bot: JournalBot, monkeypatch: pytest.MonkeyPatch
 ) -> None:
