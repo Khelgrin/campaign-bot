@@ -1,5 +1,7 @@
 """Tests for session persistence and lifecycle."""
 
+from typing import Any, cast
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 
@@ -31,6 +33,23 @@ def test_session_creation_assigns_number_and_persists_context(tmp_path) -> None:
     assert session.title == "Session 1"
     assert session.played_at == session.created_at
     assert restored == session
+
+
+def test_selected_session_survives_a_new_store_instance(tmp_path) -> None:
+    """Selecting a session persists the guild context across restarts."""
+    path = tmp_path / "journalbot.sqlite3"
+    CampaignStore(path).create(123, "Kingmaker", None)
+    sessions = SessionStore(path)
+    first = sessions.create(123, "Opening")
+    sessions.end_current(123)
+    sessions.create(123, "Finale")
+
+    reopened = SessionStore(path)
+    selected = reopened.select(123, "1")
+    restored = SessionStore(path).current(123)
+
+    assert selected.id == first.id
+    assert restored == selected
 
 
 def test_session_requires_current_active_campaign(tmp_path) -> None:
@@ -217,6 +236,27 @@ def test_database_enforces_positive_session_numbers_and_one_active_session(
                     campaign_id=campaign.id,
                     number=2,
                     title="Second",
+                    description=None,
+                    status="ACTIVE",
+                    created_at="now",
+                    played_at="now",
+                    ended_at=None,
+                )
+            )
+
+
+def test_database_requires_a_session_campaign_foreign_key(tmp_path) -> None:
+    """The schema rejects sessions without a campaign."""
+    path = tmp_path / "journalbot.sqlite3"
+    factory = create_session_factory(path)
+
+    with pytest.raises(IntegrityError):
+        with factory.begin() as db:
+            db.add(
+                SessionModel(
+                    campaign_id=cast(Any, None),
+                    number=1,
+                    title="Orphan",
                     description=None,
                     status="ACTIVE",
                     created_at="now",

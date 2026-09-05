@@ -526,7 +526,7 @@ When making a decision that contradicts an existing ADR, do not silently overrid
 
 ---
 
-# Working Rules for Codex
+# Working Rules for Agents
 
 1. Do not write code outside the currently requested scope.
 2. Before introducing a new domain object, clarify its relationship to Campaign.
