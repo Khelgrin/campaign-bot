@@ -1,7 +1,8 @@
-name: Lint
+name: CI
 
 on:
   push:
+  pull_request:
 
 jobs:
   lint:
@@ -11,3 +12,12 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: Run linters
         run: make lint
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Run unit tests
+        run: make test

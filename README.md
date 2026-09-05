@@ -21,6 +21,19 @@ for the bot to read `Bot: describe` messages.
 
 Alternatively run Makefile commands.
 
+## Quality checks
+
+Run static checks and the offline unit test suite before pushing changes:
+
+```text
+make lint
+make test
+```
+
+The pytest suite uses mocked Discord objects, so it does not require a bot token,
+a running bot, or access to a Discord server. GitHub Actions runs both checks on
+pushes and pull requests.
+
 The bot also accepts `DISCORD_TOKEN` as a regular environment variable. This is
 the intended deployment configuration: set the secret in the chosen host's secret
 manager or environment-variable settings, rather than uploading a `.env` file.
