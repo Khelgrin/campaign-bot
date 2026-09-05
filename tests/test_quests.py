@@ -14,7 +14,11 @@ from journalbot.sessions import SessionStore
 
 
 def test_quest_creation_requires_active_campaign_and_session(tmp_path) -> None:
-    """Creating a quest requires both campaign and session context."""
+    """
+    Quest creation is attempted with no campaign, with a campaign but no session, and
+    finally with both selected. This verifies each required context is enforced and the
+    successful quest starts ACTIVE in the selected session.
+    """
     path = tmp_path / "journalbot.sqlite3"
     store = QuestStore(path)
 
@@ -32,7 +36,11 @@ def test_quest_creation_requires_active_campaign_and_session(tmp_path) -> None:
 
 
 def test_quest_update_and_completion_keep_identity_and_history(tmp_path) -> None:
-    """Quest metadata changes preserve identity while lifecycle changes are explicit."""
+    """
+    A quest is updated, completed, and then failed through the store. This verifies
+    metadata updates preserve identity while terminal transitions set the corresponding
+    status and closing timestamp.
+    """
     path = tmp_path / "journalbot.sqlite3"
     CampaignStore(path).create(123, "Kingmaker", None)
     SessionStore(path).create(123, "Session 1")
@@ -69,7 +77,11 @@ def test_quest_update_and_completion_keep_identity_and_history(tmp_path) -> None
 def test_quest_lookup_is_campaign_scoped_and_ambiguous_titles_are_rejected(
     tmp_path,
 ) -> None:
-    """The same quest title can recur across campaigns but not within one campaign."""
+    """
+    The same quest title can recur across campaigns but not within one campaign. This
+    exercises the `quest lookup is campaign scoped and ambiguous titles are rejected`
+    scenario and asserts the expected observable result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaigns = CampaignStore(path)
     campaigns.create(123, "Campaign A", None)
@@ -100,7 +112,11 @@ def test_quest_lookup_is_campaign_scoped_and_ambiguous_titles_are_rejected(
 
 
 def test_database_enforces_quest_lifecycle_invariants(tmp_path) -> None:
-    """Quest lifecycle fields must match the accepted state machine."""
+    """
+    The database attempts to store an ACTIVE quest with `closed_at` filled and a
+    COMPLETED quest with `closed_at` missing. This verifies the `quest_lifecycle`
+    constraint rejects both invalid status/timestamp combinations.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaign = CampaignStore(path).create(123, "Kingmaker", None)
     session = SessionStore(path).create(123, "Session 1")
@@ -140,7 +156,11 @@ def test_database_enforces_quest_lifecycle_invariants(tmp_path) -> None:
 
 
 def test_quest_status_filter_uses_campaign_context(tmp_path) -> None:
-    """Listing quests accepts the supported lifecycle filters."""
+    """
+    Listing quests accepts the supported lifecycle filters. This exercises the `quest
+    status filter uses campaign context` scenario and asserts the expected observable
+    result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     CampaignStore(path).create(123, "Kingmaker", None)
     SessionStore(path).create(123, "Session 1")

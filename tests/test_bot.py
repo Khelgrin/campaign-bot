@@ -41,13 +41,21 @@ def user_message() -> MagicMock:
 
 
 def test_create_bot_configures_message_content_intent(bot: JournalBot) -> None:
-    """The text-command handler receives message content."""
+    """
+    The text-command handler receives message content. This exercises the `create bot
+    configures message content intent` scenario and asserts the expected observable
+    result or error.
+    """
     assert bot.command_prefix == "!"
     assert bot.intents.message_content is True
 
 
 def test_named_arguments_support_assignment_and_double_dash_forms() -> None:
-    """Named command options accept both supported syntaxes."""
+    """
+    Named command options accept both supported syntaxes. This exercises the `named
+    arguments support assignment and double dash forms` scenario and asserts the
+    expected observable result or error.
+    """
     assert parse_named_arguments(
         'title="Zrób Bota" description="Przygotuj bota" giver="Khel"'
     ) == {
@@ -74,7 +82,10 @@ def test_named_arguments_support_assignment_and_double_dash_forms() -> None:
 def test_describe_message_returns_bot_purpose(
     bot: JournalBot, user_message: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The describe trigger sends the bot description."""
+    """
+    The describe trigger sends the bot description. This exercises the `describe message
+    returns bot purpose` scenario and asserts the expected observable result or error.
+    """
     user_message.content = "Bot: describe"
     process_commands = AsyncMock()
     monkeypatch.setattr(bot, "process_commands", process_commands)
@@ -95,7 +106,10 @@ def test_help_aliases_list_available_commands(
     content: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Both help triggers send the same command list."""
+    """
+    Both help triggers send the same command list. This exercises the `help aliases list
+    available commands` scenario and asserts the expected observable result or error.
+    """
     user_message.content = content
     process_commands = AsyncMock()
     monkeypatch.setattr(bot, "process_commands", process_commands)
@@ -108,7 +122,10 @@ def test_help_aliases_list_available_commands(
 def test_bot_messages_are_ignored(
     bot: JournalBot, user_message: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The bot does not respond to messages sent by bots."""
+    """
+    The bot does not respond to messages sent by bots. This exercises the `bot messages
+    are ignored` scenario and asserts the expected observable result or error.
+    """
     user_message.author.bot = True
     process_commands = AsyncMock()
     monkeypatch.setattr(bot, "process_commands", process_commands)
@@ -122,7 +139,11 @@ def test_bot_messages_are_ignored(
 def test_other_messages_do_not_send_a_response(
     bot: JournalBot, user_message: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Unrecognised messages are passed to the command processor only."""
+    """
+    Unrecognised messages are passed to the command processor only. This exercises the
+    `other messages do not send a response` scenario and asserts the expected observable
+    result or error.
+    """
     user_message.content = "Hello, JournalBot"
     process_commands = AsyncMock()
     monkeypatch.setattr(bot, "process_commands", process_commands)
@@ -139,7 +160,11 @@ def test_campaign_and_session_commands_are_logged(
     command_name: str,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Lifecycle command invocations include timestamp, user, and text."""
+    """
+    Lifecycle command invocations include timestamp, user, and text. This exercises the
+    `campaign and session commands are logged` scenario and asserts the expected
+    observable result or error.
+    """
     context = SimpleNamespace(
         command=SimpleNamespace(qualified_name=command_name),
         author=SimpleNamespace(name="Tomek", id=42),
@@ -159,7 +184,11 @@ def test_campaign_and_session_commands_are_logged(
 def test_unrelated_commands_are_not_logged(
     bot: JournalBot, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Only campaign and session commands use the invocation audit log."""
+    """
+    Only campaign and session commands use the invocation audit log. This exercises the
+    `unrelated commands are not logged` scenario and asserts the expected observable
+    result or error.
+    """
     context = SimpleNamespace(
         command=SimpleNamespace(qualified_name="help"),
         author=SimpleNamespace(name="Tomek", id=42),
@@ -175,7 +204,11 @@ def test_unrelated_commands_are_not_logged(
 def test_missing_required_parameter_explains_how_to_get_help(
     bot: JournalBot,
 ) -> None:
-    """Missing command arguments produce actionable user-facing guidance."""
+    """
+    Missing command arguments produce actionable user-facing guidance. This exercises
+    the `missing required parameter explains how to get help` scenario and asserts the
+    expected observable result or error.
+    """
     context = MagicMock()
     context.send = AsyncMock()
     error = commands.MissingRequiredArgument(
@@ -193,7 +226,10 @@ def test_missing_required_parameter_explains_how_to_get_help(
 def test_ready_does_not_fetch_a_channel_without_configuration(
     bot: JournalBot, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A ready announcement is optional."""
+    """
+    A ready announcement is optional. This exercises the `ready does not fetch a channel
+    without configuration` scenario and asserts the expected observable result or error.
+    """
     monkeypatch.delenv("DISCORD_READY_CHANNEL_ID", raising=False)
     fetch_channel = AsyncMock()
     monkeypatch.setattr(bot, "fetch_channel", fetch_channel)
@@ -207,7 +243,11 @@ def test_ready_does_not_fetch_a_channel_without_configuration(
 def test_ready_announces_once_to_configured_messageable_channel(
     bot: JournalBot, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The configured channel receives one ready announcement."""
+    """
+    The configured channel receives one ready announcement. This exercises the `ready
+    announces once to configured messageable channel` scenario and asserts the expected
+    observable result or error.
+    """
 
     class FakeMessageable:
         def __init__(self) -> None:
@@ -230,7 +270,11 @@ def test_ready_announces_once_to_configured_messageable_channel(
 def test_ready_does_not_send_to_non_messageable_channel(
     bot: JournalBot, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A non-messageable configured channel leaves the announcement pending."""
+    """
+    A non-messageable configured channel leaves the announcement pending. This exercises
+    the `ready does not send to non messageable channel` scenario and asserts the
+    expected observable result or error.
+    """
     monkeypatch.setenv("DISCORD_READY_CHANNEL_ID", "123")
     monkeypatch.setattr(bot, "fetch_channel", AsyncMock(return_value=object()))
 
@@ -246,7 +290,11 @@ def test_ready_does_not_send_to_non_messageable_channel(
 def test_get_ready_channel_id_returns_optional_numeric_value(
     monkeypatch: pytest.MonkeyPatch, value: str | None, expected: int | None
 ) -> None:
-    """Ready channel configuration is optional and numeric."""
+    """
+    Ready channel configuration is optional and numeric. This exercises the `get ready
+    channel id returns optional numeric value` scenario and asserts the expected
+    observable result or error.
+    """
     if value is None:
         monkeypatch.delenv("DISCORD_READY_CHANNEL_ID", raising=False)
     else:
@@ -258,7 +306,11 @@ def test_get_ready_channel_id_returns_optional_numeric_value(
 def test_get_ready_channel_id_rejects_non_numeric_value(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Invalid channel IDs do not prevent startup."""
+    """
+    Invalid channel IDs do not prevent startup. This exercises the `get ready channel id
+    rejects non numeric value` scenario and asserts the expected observable result or
+    error.
+    """
     monkeypatch.setenv("DISCORD_READY_CHANNEL_ID", "not-a-channel-id")
 
     assert _get_ready_channel_id() is None
@@ -266,7 +318,11 @@ def test_get_ready_channel_id_rejects_non_numeric_value(
 
 
 def test_campaign_commands_cover_lifecycle_and_guild_context(tmp_path) -> None:
-    """Campaign commands expose the persistent lifecycle and guild selection."""
+    """
+    Campaign commands expose the persistent lifecycle and guild selection. This
+    exercises the `campaign commands cover lifecycle and guild context` scenario and
+    asserts the expected observable result or error.
+    """
     cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
     ctx = MagicMock()
     ctx.guild = SimpleNamespace(id=123)
@@ -330,7 +386,11 @@ def test_campaign_commands_cover_lifecycle_and_guild_context(tmp_path) -> None:
 
 
 def test_session_commands_cover_lifecycle_and_context(tmp_path) -> None:
-    """Session commands expose creation, inspection, updates, and ending."""
+    """
+    Session commands expose creation, inspection, updates, and ending. This exercises
+    the `session commands cover lifecycle and context` scenario and asserts the expected
+    observable result or error.
+    """
     cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
     ctx = MagicMock()
     ctx.guild = SimpleNamespace(id=123)
@@ -411,7 +471,11 @@ def test_session_commands_cover_lifecycle_and_context(tmp_path) -> None:
 
 
 def test_campaign_commands_reject_direct_messages(tmp_path) -> None:
-    """Campaign lifecycle commands require a Discord guild context."""
+    """
+    Campaign lifecycle commands require a Discord guild context. This exercises the
+    `campaign commands reject direct messages` scenario and asserts the expected
+    observable result or error.
+    """
     cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
     ctx = MagicMock()
     ctx.guild = None
@@ -429,7 +493,11 @@ def test_campaign_commands_reject_direct_messages(tmp_path) -> None:
 
 
 def test_quest_creation_accepts_both_named_argument_forms(tmp_path) -> None:
-    """Quest creation keeps values with spaces in either supported syntax."""
+    """
+    Quest creation keeps values with spaces in either supported syntax. This exercises
+    the `quest creation accepts both named argument forms` scenario and asserts the
+    expected observable result or error.
+    """
     cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
     ctx = MagicMock()
     ctx.guild = SimpleNamespace(id=123)
@@ -482,7 +550,11 @@ def test_quest_creation_accepts_both_named_argument_forms(tmp_path) -> None:
 def test_quest_commands_cover_details_listing_and_state_transitions(
     tmp_path,
 ) -> None:
-    """Quest commands expose metadata, filters, and lifecycle transitions."""
+    """
+    Quest commands expose metadata, filters, and lifecycle transitions. This exercises
+    the `quest commands cover details listing and state transitions` scenario and
+    asserts the expected observable result or error.
+    """
     cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
     ctx = MagicMock()
     ctx.guild = SimpleNamespace(id=123)
@@ -599,13 +671,21 @@ def test_quest_commands_cover_details_listing_and_state_transitions(
     ],
 )
 def test_named_argument_parser_rejects_malformed_input(arguments: str) -> None:
-    """Malformed named arguments are rejected instead of being guessed."""
+    """
+    Malformed named arguments are rejected instead of being guessed. This exercises the
+    `named argument parser rejects malformed input` scenario and asserts the expected
+    observable result or error.
+    """
     with pytest.raises(ValueError):
         parse_named_arguments(arguments)
 
 
 def test_named_argument_parser_rejects_nonleading_identifier() -> None:
-    """An identifier cannot be supplied as a named option."""
+    """
+    An identifier cannot be supplied as a named option. This exercises the `named
+    argument parser rejects nonleading identifier` scenario and asserts the expected
+    observable result or error.
+    """
     with pytest.raises(ValueError, match="identifier must be the first"):
         parse_named_arguments(
             "title=value identifier=42", positional_identifier=True
@@ -628,7 +708,11 @@ def test_named_argument_parser_rejects_nonleading_identifier() -> None:
 def test_command_validation_reports_usage_errors(
     tmp_path, command: str, arguments: str, message: str
 ) -> None:
-    """Command validation failures are reported to the user."""
+    """
+    Command validation failures are reported to the user. This exercises the `command
+    validation reports usage errors` scenario and asserts the expected observable result
+    or error.
+    """
     cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
     ctx = MagicMock()
     ctx.guild = SimpleNamespace(id=123)
@@ -664,7 +748,11 @@ def test_command_validation_reports_usage_errors(
     ],
 )
 def test_all_commands_reject_direct_messages(tmp_path, command: str) -> None:
-    """Every guild-scoped command rejects direct-message contexts."""
+    """
+    Every guild-scoped command rejects direct-message contexts. This exercises the `all
+    commands reject direct messages` scenario and asserts the expected observable result
+    or error.
+    """
     cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
     ctx = MagicMock()
     ctx.guild = None
@@ -703,7 +791,11 @@ def test_all_commands_reject_direct_messages(tmp_path, command: str) -> None:
 
 
 def test_quest_commands_report_missing_context_and_not_found_errors(tmp_path) -> None:
-    """Quest commands report missing context and unknown identifiers clearly."""
+    """
+    Quest commands report missing context and unknown identifiers clearly. This
+    exercises the `quest commands report missing context and not found errors` scenario
+    and asserts the expected observable result or error.
+    """
     cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
     ctx = MagicMock()
     ctx.guild = SimpleNamespace(id=123)
@@ -745,7 +837,11 @@ def test_quest_commands_report_missing_context_and_not_found_errors(tmp_path) ->
 
 
 def test_list_quests_reports_empty_filtered_results(tmp_path) -> None:
-    """A valid filter with no matching quests produces an explicit response."""
+    """
+    A valid filter with no matching quests produces an explicit response. This exercises
+    the `list quests reports empty filtered results` scenario and asserts the expected
+    observable result or error.
+    """
     cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
     ctx = MagicMock()
     ctx.guild = SimpleNamespace(id=123)

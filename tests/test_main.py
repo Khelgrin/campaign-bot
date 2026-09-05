@@ -8,7 +8,10 @@ from journalbot import main as application
 
 
 def test_main_requires_a_discord_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Startup fails clearly when no token is configured."""
+    """
+    Startup fails clearly when no token is configured. This exercises the `main requires
+    a discord token` scenario and asserts the expected observable result or error.
+    """
     monkeypatch.delenv("DISCORD_TOKEN", raising=False)
     monkeypatch.setattr(application, "load_dotenv", MagicMock())
 
@@ -19,7 +22,11 @@ def test_main_requires_a_discord_token(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_main_runs_created_bot_with_configured_token(
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Startup passes the configured token to the Discord client."""
+    """
+    Startup passes the configured token to the Discord client. This exercises the `main
+    runs created bot with configured token` scenario and asserts the expected observable
+    result or error.
+    """
     bot = MagicMock()
     monkeypatch.setenv("DISCORD_TOKEN", "test-token")
     monkeypatch.setattr(application, "load_dotenv", MagicMock())
