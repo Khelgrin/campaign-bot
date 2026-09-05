@@ -15,6 +15,11 @@ To have the bot announce when it starts, optionally set
 to rumble` once after a successful connection. Discord Developer Mode must be
 enabled to copy a channel ID from the channel's context menu.
 
+Campaign data is stored in SQLite. By default it is kept at
+`data/journalbot.sqlite3`; set `JOURNALBOT_DATABASE_PATH` to use another file.
+For deployment, point it at a file on persistent storage. The selected campaign
+is stored per Discord guild and survives bot restarts.
+
 In the Discord Developer Portal, open the bot's **Bot** settings and enable the
 **Message Content Intent** under *Privileged Gateway Intents*. This is required
 for the bot to read `Bot: describe` messages.
@@ -39,7 +44,7 @@ the intended deployment configuration: set the secret in the chosen host's secre
 manager or environment-variable settings, rather than uploading a `.env` file.
 Hosting and deployment infrastructure remain intentionally undecided.
 
-The current skeleton connects to Discord, logs when it is ready, and replies to
-`Bot: describe` with its purpose. Send `Bot: help` or `Bot: commands` to list
-the available text commands. It deliberately contains no campaign or journal
-commands yet.
+The bot connects to Discord, logs when it is ready, and supports campaign
+commands such as `!start-campaign`, `!use-campaign`, `!list-campaign`,
+`!read-campaign`, `!update-campaign`, and `!end-campaign`. Send `Bot: help` or
+`Bot: commands` to list them.

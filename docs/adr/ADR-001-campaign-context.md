@@ -236,17 +236,17 @@ Potential future support for multiple simultaneous campaign contexts can be adde
 
 ## 10. MVP Acceptance Criteria
 
-* [ ] `Campaign` can be created, read, updated and ended.
-* [ ] Every campaign has a stable unique ID.
-* [ ] Campaign status is either `ACTIVE` or `ENDED`.
-* [ ] `ACTIVE` campaigns have `ended_at = NULL`.
-* [ ] `ENDED` campaigns have a non-null `ended_at`.
-* [ ] A Discord guild can have zero or one current campaign.
-* [ ] `/use-campaign` changes the persistent current campaign.
-* [ ] `/start-campaign` automatically selects the newly created campaign.
-* [ ] Campaign context survives bot restart.
+* [x] `Campaign` can be created, read, updated and ended.
+* [x] Every campaign has a stable unique ID.
+* [x] Campaign status is either `ACTIVE` or `ENDED`.
+* [x] `ACTIVE` campaigns have `ended_at = NULL`.
+* [x] `ENDED` campaigns have a non-null `ended_at`.
+* [x] A Discord guild can have zero or one current campaign.
+* [x] `/use-campaign` changes the persistent current campaign.
+* [x] `/start-campaign` automatically selects the newly created campaign.
+* [x] Campaign context survives bot restart.
 * [ ] Child-object commands automatically use the current campaign.
-* [ ] Commands requiring campaign context fail when no campaign is selected.
-* [ ] Ending a campaign does not delete its data.
-* [ ] All users on the guild share the same campaign context.
-* [ ] Permissions are out of scope for MVP.
+* [x] Commands requiring campaign context fail when no campaign is selected.
+* [x] Ending a campaign does not delete its data.
+* [x] All users on the guild share the same campaign context.
+* [x] Permissions are out of scope for MVP.

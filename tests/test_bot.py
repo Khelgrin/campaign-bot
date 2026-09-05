@@ -1,12 +1,21 @@
 """Unit tests for JournalBot Discord event handlers."""
 
 import asyncio
+from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import discord
 import pytest
 
-from journalbot.bot import COMMANDS_HELP, JournalBot, _get_ready_channel_id, create_bot
+from journalbot.bot import (
+    COMMANDS_HELP,
+    CampaignCommands,
+    JournalBot,
+    _get_ready_channel_id,
+    create_bot,
+)
+from journalbot.campaigns import CampaignStore
 
 
 def run(coroutine: object) -> object:
@@ -170,3 +179,74 @@ def test_get_ready_channel_id_rejects_non_numeric_value(
 
     assert _get_ready_channel_id() is None
     assert "must be a numeric Discord channel ID" in caplog.text
+
+
+def test_campaign_commands_cover_lifecycle_and_guild_context(tmp_path) -> None:
+    """Campaign commands expose the persistent lifecycle and guild selection."""
+    cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
+    ctx = MagicMock()
+    ctx.guild = SimpleNamespace(id=123)
+    ctx.send = AsyncMock()
+
+    run(
+        cast(Any, cog.start_campaign.callback)(
+            cog, ctx, "Kingmaker", description="Stolen land"
+        )
+    )
+    campaign = cog.store.current(123)
+    assert campaign.title == "Kingmaker"
+    ctx.send.assert_awaited_once_with(
+        f"Campaign **Kingmaker** created and selected (ID: {campaign.id})."
+    )
+
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.read_campaign.callback)(
+            cog, ctx, identifier=str(campaign.id)
+        )
+    )
+    read_response = ctx.send.await_args.args[0]
+    assert f"ID: {campaign.id}" in read_response
+    assert "Title: Kingmaker" in read_response
+    assert "Description: Stolen land" in read_response
+    assert "Status: ACTIVE" in read_response
+
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.update_campaign.callback)(
+            cog, ctx, str(campaign.id), "New Kingmaker", description="Updated"
+        )
+    )
+    updated = cog.store.find(str(campaign.id))
+    assert updated.id == campaign.id
+    assert updated.title == "New Kingmaker"
+    assert updated.description == "Updated"
+
+    ctx.send.reset_mock()
+    run(cast(Any, cog.end_campaign.callback)(cog, ctx))
+    assert cog.store.current(123).status == "ENDED"
+    ctx.send.assert_awaited_once_with("Campaign **New Kingmaker** ended.")
+
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.use_campaign.callback)(
+            cog, ctx, identifier=str(campaign.id)
+        )
+    )
+    ctx.send.assert_awaited_once_with(
+        f"Selected campaign **New Kingmaker** (ID: {campaign.id})."
+    )
+
+
+def test_campaign_commands_reject_direct_messages(tmp_path) -> None:
+    """Campaign lifecycle commands require a Discord guild context."""
+    cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
+    ctx = MagicMock()
+    ctx.guild = None
+    ctx.send = AsyncMock()
+
+    run(cast(Any, cog.start_campaign.callback)(cog, ctx, "Kingmaker"))
+
+    ctx.send.assert_awaited_once_with(
+        "Campaign commands can only be used in a Discord server."
+    )
