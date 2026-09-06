@@ -229,7 +229,7 @@ If the product later needs to record post-completion consequences, this should b
 
 ## 9. Quest details integration
 
-`/quest-details` retrieves all progress records for the Quest:
+`!quest-details` retrieves all progress records for the Quest:
 
 ```text
 Quest
@@ -335,7 +335,7 @@ For example:
 ```text
 Quest.status = ACTIVE
 
-/progress-quest
+!progress-quest
 "Found the merchant."
 
 Quest.status remains:
@@ -345,13 +345,13 @@ ACTIVE
 The Quest becomes completed only through:
 
 ```text
-/complete-quest
+!complete-quest
 ```
 
 Likewise, a Quest becomes failed only through:
 
 ```text
-/fail-quest
+!fail-quest
 ```
 
 This prevents the bot from attempting to infer game state from natural-language descriptions.
@@ -414,7 +414,7 @@ The Quest remains small and queryable while its history can grow indefinitely.
 The model supports the desired player experience:
 
 ```text
-/list-quests active
+!list-quests active
         ↓
 choose Quest
         ↓

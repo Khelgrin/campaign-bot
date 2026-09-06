@@ -4,7 +4,11 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from journalbot.campaigns import CampaignStore
-from journalbot.database import QuestModel, create_session_factory
+from journalbot.database import (
+    QuestModel,
+    ServerContextModel,
+    create_session_factory,
+)
 from journalbot.quests import (
     AmbiguousQuestError,
     QuestNotFoundError,
@@ -33,6 +37,39 @@ def test_quest_creation_requires_active_campaign_and_session(tmp_path) -> None:
     quest = store.create(123, "Rescue the Merchant", "Find the missing merchant.")
     assert quest.status == "ACTIVE"
     assert quest.started_session_id > 0
+
+
+def test_quest_creation_rejects_session_from_another_campaign(tmp_path) -> None:
+    """Quest creation rejects a current session that belongs to another campaign."""
+    path = tmp_path / "journalbot.sqlite3"
+    campaigns = CampaignStore(path)
+    sessions = SessionStore(path)
+    quests = QuestStore(path)
+
+    campaign_a = campaigns.create(123, "Campaign A", None)
+    session_a = sessions.create(123, "Session A")
+    sessions.end_current(123)
+
+    campaign_b = campaigns.create(123, "Campaign B", None)
+    session_b = sessions.create(123, "Session B")
+    sessions.end_current(123)
+
+    campaigns.select(123, str(campaign_a.id))
+    factory = create_session_factory(path)
+    with factory.begin() as db:
+        context = db.get(ServerContextModel, "123")
+        assert context is not None
+        context.current_session_id = session_b.id
+
+    with pytest.raises(
+        ValueError,
+        match="selected session does not belong to the current campaign",
+    ):
+        quests.create(123, "Cross-Campaign Quest")
+
+    assert quests.list(123) == []
+    assert session_a.campaign_id == campaign_a.id
+    assert campaign_b.id != campaign_a.id
 
 
 def test_quest_update_and_completion_keep_identity_and_history(tmp_path) -> None:
