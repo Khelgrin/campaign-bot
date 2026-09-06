@@ -32,7 +32,6 @@ class JournalRender:
             return
         legacy_view = self.view
         layout = discord.ui.LayoutView(timeout=legacy_view.timeout)
-        layout.add_item(discord.ui.TextDisplay(self.content))
         buttons = [
             item
             for item in legacy_view.children
@@ -40,23 +39,30 @@ class JournalRender:
         ]
         if self.kind == "dashboard":
             self._add_dashboard_layout(layout, buttons)
-        elif self.kind == "quest_list":
-            self._add_quest_list_layout(layout, buttons)
-        elif self.kind == "session_list":
-            self._add_session_list_layout(layout, buttons)
-        elif self.kind == "quest_details":
-            self._add_quest_details_layout(layout, buttons)
-        elif self.kind == "session_details":
-            self._add_session_details_layout(layout, buttons)
         else:
-            layout.add_item(discord.ui.Separator())
-            self._add_fields(layout)
-            _add_button_rows(layout, buttons)
+            panel: discord.ui.Container[Any] = discord.ui.Container(
+                accent_color=0x1E293B
+            )
+            panel.add_item(discord.ui.TextDisplay(self.content))
+            if self.kind == "quest_list":
+                self._add_quest_list_layout(panel, buttons)
+            elif self.kind == "session_list":
+                self._add_session_list_layout(panel, buttons)
+            elif self.kind == "quest_details":
+                self._add_quest_details_layout(panel, buttons)
+            elif self.kind == "session_details":
+                self._add_session_details_layout(panel, buttons)
+            else:
+                panel.add_item(discord.ui.Separator())
+                self._add_fields(panel)
+                _add_button_rows(panel, buttons)
+            layout.add_item(panel)
         object.__setattr__(self, "view", layout)
 
     def _add_dashboard_layout(
         self, layout: discord.ui.LayoutView, buttons: list[discord.ui.Button]
     ) -> None:
+        """Place the complete dashboard inside one Components V2 container."""
         filter_buttons = [
             button
             for button in buttons
@@ -96,46 +102,44 @@ class JournalRender:
             stats.append((name, value))
             stats_end += 1
 
-        summary_children: list[discord.ui.Item[Any]] = [
-            discord.ui.TextDisplay(f"**{campaign_name}**\n{campaign_value}"),
+        children: list[discord.ui.Item[Any]] = [
+            discord.ui.TextDisplay(self.content),
+            discord.ui.TextDisplay(f"### **{campaign_name}**\n{campaign_value}"),
             discord.ui.Separator(),
-            discord.ui.TextDisplay("**Quests**"),
+            discord.ui.TextDisplay("### **Quests**"),
             discord.ui.TextDisplay(
-                "  │  ".join(f"**{name}** {value}" for name, value in stats)
+                "  \u2502  ".join(f"**{name}** {value}" for name, value in stats)
             ),
         ]
-        layout.add_item(
-            discord.ui.Container(*summary_children, accent_color=0x34D399)
-        )
-        _add_button_row(layout, filter_buttons)
-        layout.add_item(discord.ui.Separator())
+        if filter_buttons:
+            children.append(discord.ui.ActionRow(*filter_buttons))
+        children.append(discord.ui.Separator())
 
         recent_started = False
-        activity_children: list[discord.ui.Item[Any]] = []
         for name, value, _ in self.fields[stats_end:]:
             if name == "Recent activity":
                 recent_started = True
-                activity_children.append(discord.ui.TextDisplay(f"**{name}**\n{value}"))
+                children.append(discord.ui.TextDisplay(f"### **{name}**"))
             elif recent_started and recent_buttons:
-                activity_children.append(
+                children.append(
                     discord.ui.Section(
                         discord.ui.TextDisplay(f"**{name}**\n{value}"),
                         accessory=recent_buttons.pop(0),
                     )
                 )
-        if recent_started:
-            layout.add_item(
-                discord.ui.Container(*activity_children, accent_color=0x334155)
-            )
-        else:
-            layout.add_item(discord.ui.Container(
-                discord.ui.TextDisplay("**Recent activity**"),
-                accent_color=0x334155,
-            ))
-        _add_button_rows(layout, trailing_buttons)
+                children.append(discord.ui.Separator())
+
+        if not recent_started:
+            children.append(discord.ui.TextDisplay("**Recent activity**"))
+        for index in range(0, len(trailing_buttons), 5):
+            children.append(discord.ui.ActionRow(*trailing_buttons[index : index + 5]))
+
+        # Discord Components V2 prohibits nested containers; this single outer
+        # container provides the dashboard background and retains all content.
+        layout.add_item(discord.ui.Container(*children, accent_color=0x46D789))
 
     def _add_quest_list_layout(
-        self, layout: discord.ui.LayoutView, buttons: list[discord.ui.Button]
+        self, layout: discord.ui.Container, buttons: list[discord.ui.Button]
     ) -> None:
         filters = [
             button
@@ -171,7 +175,7 @@ class JournalRender:
         _add_button_rows(layout, trailing)
 
     def _add_session_list_layout(
-        self, layout: discord.ui.LayoutView, buttons: list[discord.ui.Button]
+        self, layout: discord.ui.Container, buttons: list[discord.ui.Button]
     ) -> None:
         session_buttons = [
             button
@@ -193,20 +197,20 @@ class JournalRender:
         _add_button_rows(layout, trailing)
 
     def _add_quest_details_layout(
-        self, layout: discord.ui.LayoutView, buttons: list[discord.ui.Button]
+        self, layout: discord.ui.Container, buttons: list[discord.ui.Button]
     ) -> None:
         layout.add_item(discord.ui.Separator())
         self._add_fields(layout)
         _add_button_rows(layout, buttons)
 
     def _add_session_details_layout(
-        self, layout: discord.ui.LayoutView, buttons: list[discord.ui.Button]
+        self, layout: discord.ui.Container, buttons: list[discord.ui.Button]
     ) -> None:
         layout.add_item(discord.ui.Separator())
         self._add_fields(layout)
         _add_button_rows(layout, buttons)
 
-    def _add_fields(self, layout: discord.ui.LayoutView) -> None:
+    def _add_fields(self, layout: discord.ui.Container) -> None:
         inline_fields: list[tuple[str, str]] = []
         for name, value, inline in self.fields:
             if name == SEPARATOR:
@@ -264,10 +268,10 @@ class JournalRenderer:
             ),
             (SEPARATOR, "\u200b", False),
             ("Quests", "\u200b", False),
-            ("📜  " + str(counts["ACTIVE"]), "Active", True),
+            ("⚔️  " + str(counts["ACTIVE"]), "Active", True),
             ("✅  " + str(counts["COMPLETED"]), "Completed", True),
             ("❌  " + str(counts["FAILED"]), "Failed", True),
-            ("🗓️  " + session_text, "Current Session", True),
+            ("🗓️  " + session_text, "", True),
         ]
         if recent_quests:
             fields.append(("Recent activity", "\u200b", False))
@@ -646,7 +650,7 @@ async def _error(interaction: discord.Interaction, message: str) -> None:
 
 
 def _flush_inline_fields(
-    layout: discord.ui.LayoutView, fields: list[tuple[str, str]]
+    layout: discord.ui.Container, fields: list[tuple[str, str]]
 ) -> None:
     if not fields:
         return
@@ -659,14 +663,16 @@ def _flush_inline_fields(
 
 
 def _add_button_row(
-    layout: discord.ui.LayoutView, buttons: list[discord.ui.Button]
+    layout: discord.ui.LayoutView | discord.ui.Container[Any],
+    buttons: list[discord.ui.Button],
 ) -> None:
     if buttons:
         layout.add_item(discord.ui.ActionRow(*buttons))
 
 
 def _add_button_rows(
-    layout: discord.ui.LayoutView, buttons: list[discord.ui.Button]
+    layout: discord.ui.LayoutView | discord.ui.Container[Any],
+    buttons: list[discord.ui.Button],
 ) -> None:
     for index in range(0, len(buttons), 5):
         _add_button_row(layout, buttons[index : index + 5])
@@ -687,15 +693,15 @@ def _button_style(custom_id: str) -> discord.ButtonStyle:
 
 def _quest_emoji(status: str) -> str:
     return {
-        "ACTIVE": "📜",
-        "COMPLETED": "⭐",
-        "FAILED": "📕",
+        "ACTIVE": "⚔️",
+        "COMPLETED": "✅",
+        "FAILED": "❌",
     }.get(status, "📜")
 
 
 def _status_label(status: str) -> str:
     return {
-        "ACTIVE": "🟢 Active",
+        "ACTIVE": "⚔️ Active",
         "COMPLETED": "✅ Completed",
         "FAILED": "❌ Failed",
     }.get(status, status.title())
@@ -708,7 +714,7 @@ def _button_emoji(custom_id: str, label: str) -> str | None:
     if ":list:all:" in custom_id or custom_id == "j:q:all:0":
         return "📜"
     if ":list:active:" in custom_id:
-        return "✅"
+        return "⚔️"
     if ":list:completed:" in custom_id:
         return "✅"
     if ":list:failed:" in custom_id:

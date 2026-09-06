@@ -42,27 +42,39 @@ def setup_journal(tmp_path):
 def view_buttons(
     view: discord.ui.View | discord.ui.LayoutView,
 ) -> list[discord.ui.Button]:
-    return [
-        item
-        for row in view.children
-        if isinstance(row, discord.ui.ActionRow)
-        for item in row.children
-        if isinstance(item, discord.ui.Button)
-    ]
+    def collect(children: list[discord.ui.Item[Any]]) -> list[discord.ui.Button]:
+        buttons: list[discord.ui.Button] = []
+        for child in children:
+            if isinstance(child, discord.ui.ActionRow):
+                buttons.extend(
+                    item
+                    for item in child.children
+                    if isinstance(item, discord.ui.Button)
+                )
+            elif isinstance(child, discord.ui.Container):
+                buttons.extend(collect(child.children))
+            elif isinstance(child, discord.ui.Section) and isinstance(
+                child.accessory, discord.ui.Button
+            ):
+                buttons.append(child.accessory)
+        return buttons
+
+    return collect(view.children)
 
 
-def view_text(view: discord.ui.LayoutView) -> str:
-    chunks: list[str] = []
-    for item in view.children:
-        if isinstance(item, discord.ui.TextDisplay):
-            chunks.append(item.content)
-        elif isinstance(item, discord.ui.Container):
-            chunks.extend(
-                child.content
-                for child in item.children
-                if isinstance(child, discord.ui.TextDisplay)
-            )
-    return "\n".join(chunks)
+def view_text(view: discord.ui.View | discord.ui.LayoutView) -> str:
+    def collect(children: list[discord.ui.Item[Any]]) -> list[str]:
+        chunks: list[str] = []
+        for child in children:
+            if isinstance(child, discord.ui.TextDisplay):
+                chunks.append(child.content)
+            elif isinstance(child, discord.ui.Container):
+                chunks.extend(collect(child.children))
+            elif isinstance(child, discord.ui.Section):
+                chunks.extend(collect(child.children))
+        return chunks
+
+    return "\n".join(collect(view.children))
 
 
 def test_renderer_builds_dashboard_and_all_navigation_views(tmp_path):
@@ -77,39 +89,31 @@ def test_renderer_builds_dashboard_and_all_navigation_views(tmp_path):
     assert "j:s:list:0" in dashboard_ids
 
     quest_list = renderer.quest_list("all", 0)
-    assert any(
-        isinstance(item, discord.ui.TextDisplay)
-        and "Find the Merchant" in item.content
-        for item in quest_list.view.children
-    )
+    assert isinstance(quest_list.view.children[0], discord.ui.Container)
+    assert "Find the Merchant" in view_text(quest_list.view)
     assert "j:q:view:" + str(quest.id) in {
         item.custom_id for item in view_buttons(quest_list.view)
     }
-    assert any(
-        isinstance(item, discord.ui.TextDisplay) and "Opening" in item.content
-        for item in renderer.session_list(0).view.children
-    )
-    assert "The party found a hidden passage." in "\n".join(
-        item.content
-        for item in renderer.session_details(session.id, 0).view.children
-        if isinstance(item, discord.ui.TextDisplay)
-    )
-    assert "Tracks lead toward the mine." in "\n".join(
-        item.content
-        for item in renderer.session_details(session.id, 0).view.children
-        if isinstance(item, discord.ui.TextDisplay)
-    )
+    session_list = renderer.session_list(0)
+    assert isinstance(session_list.view.children[0], discord.ui.Container)
+    assert "Opening" in view_text(session_list.view)
+    session_details = renderer.session_details(session.id, 0)
+    assert isinstance(session_details.view.children[0], discord.ui.Container)
+    assert "The party found a hidden passage." in view_text(session_details.view)
+    assert "Tracks lead toward the mine." in view_text(session_details.view)
 
 
 def test_renderer_quest_details_and_confirmation_actions(tmp_path):
     renderer, _, quests, _, quest = setup_journal(tmp_path)
     details = renderer.quest_details(quest.id, "active", 0)
+    assert isinstance(details.view.children[0], discord.ui.Container)
     custom_ids = [item.custom_id for item in view_buttons(details.view)]
     assert f"j:q:progress:{quest.id}" in custom_ids
     assert f"j:q:complete:{quest.id}:active:0" in custom_ids
     assert f"j:q:fail:{quest.id}:active:0" in custom_ids
 
     confirmation = renderer._confirmation("q", "complete", quest.id, "active", 0)
+    assert isinstance(confirmation.view.children[0], discord.ui.Container)
     assert f"j:q:confirm-complete:{quest.id}:active:0" in [
         item.custom_id for item in view_buttons(confirmation.view)
     ]
@@ -225,11 +229,8 @@ def test_components_v2_rendering_and_empty_dashboard(tmp_path):
         campaigns, SessionStore(database), QuestStore(database), 123
     )
     dashboard = renderer.dashboard()
-    assert "No quests recorded yet." in "\n".join(
-        item.content
-        for item in dashboard.view.children
-        if isinstance(item, discord.ui.TextDisplay)
-    )
+    assert isinstance(dashboard.view.children[0], discord.ui.Container)
+    assert "No quests recorded yet." in view_text(dashboard.view)
 
     interaction = MagicMock()
     interaction.response.is_done.return_value = True
