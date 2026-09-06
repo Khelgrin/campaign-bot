@@ -13,6 +13,7 @@ from journalbot.campaigns import NoCampaignSelectedError
 from journalbot.database import (
     CampaignModel,
     QuestModel,
+    QuestProgressModel,
     ServerContextModel,
     create_session_factory,
 )
@@ -31,6 +32,10 @@ class AmbiguousQuestError(QuestError):
     """Raised when a quest title is not unique within its campaign."""
 
 
+class QuestProgressError(QuestError):
+    """Base class for expected quest-progress operation errors."""
+
+
 @dataclass(frozen=True)
 class Quest:
     """A quest and its current lifecycle state."""
@@ -45,6 +50,17 @@ class Quest:
     status: str
     created_at: str
     closed_at: str | None
+
+
+@dataclass(frozen=True)
+class QuestProgress:
+    """A historical progress entry for a quest."""
+
+    id: int
+    quest_id: int
+    session_id: int
+    description: str
+    created_at: str
 
 
 def _now() -> str:
@@ -66,10 +82,161 @@ def _quest(model: QuestModel) -> Quest:
     )
 
 
+def _quest_progress(model: QuestProgressModel) -> QuestProgress:
+    return QuestProgress(
+        id=model.id,
+        quest_id=model.quest_id,
+        session_id=model.session_id,
+        description=model.description,
+        created_at=model.created_at,
+    )
+
+
+class QuestProgressStore:
+    """Repository for historical quest progress entries."""
+
+    def __init__(self, database_path: str | Path) -> None:
+        self.database_path = str(Path(database_path))
+        self.session_factory = create_session_factory(database_path)
+
+    def create(
+        self,
+        guild_id: int | str,
+        quest_identifier: str,
+        description: str,
+    ) -> QuestProgress:
+        """Create a new historical progress record for the selected quest."""
+        clean_description = (description or "").strip()
+        if not clean_description:
+            raise ValueError("Quest progress description cannot be empty.")
+
+        with self.session_factory.begin() as session:
+            context = session.get(ServerContextModel, str(guild_id))
+            campaign_id = (
+                context.current_campaign_id if context is not None else None
+            )
+            if campaign_id is None:
+                raise NoCampaignSelectedError(
+                    "No campaign is currently selected. "
+                    "Use !use-campaign <id or title> first."
+                )
+            current_session = context.current_session if context is not None else None
+            if current_session is None:
+                raise NoSessionSelectedError(
+                    "No session is currently selected. "
+                    "Use !use-session <id or title> first."
+                )
+            if current_session.campaign_id != campaign_id:
+                raise ValueError(
+                    "The selected session does not belong to the current campaign."
+                )
+
+            value = quest_identifier.strip()
+            if value.isdigit():
+                models = list(
+                    session.scalars(
+                        select(QuestModel).where(
+                            QuestModel.id == int(value),
+                            QuestModel.campaign_id == campaign_id,
+                        )
+                    ).all()
+                )
+            else:
+                models = list(
+                    session.scalars(
+                        select(QuestModel).where(
+                            QuestModel.title == value,
+                            QuestModel.campaign_id == campaign_id,
+                        )
+                    ).all()
+                )
+            if len(models) > 1:
+                raise AmbiguousQuestError(
+                    "More than one quest has that title; use its ID."
+                )
+            if not models:
+                raise QuestNotFoundError(
+                    f"Quest '{quest_identifier}' was not found."
+                )
+            quest_model = models[0]
+            if quest_model.status != "ACTIVE":
+                raise ValueError(
+                    "Progress can only be added to an ACTIVE quest."
+                )
+
+            model = QuestProgressModel(
+                quest_id=quest_model.id,
+                session_id=current_session.id,
+                description=clean_description,
+                created_at=_now(),
+            )
+            session.add(model)
+            session.flush()
+        return _quest_progress(model)
+
+    def list_for_quest(
+        self,
+        guild_id: int | str,
+        quest_identifier: str,
+    ) -> Sequence[QuestProgress]:
+        """Return the historical progress entries for a quest in the campaign."""
+        with self.session_factory() as session:
+            context = session.get(ServerContextModel, str(guild_id))
+            if context is None or context.current_campaign_id is None:
+                raise NoCampaignSelectedError(
+                    "No campaign is currently selected. "
+                    "Use !use-campaign <id or title> first."
+                )
+            campaign_id = context.current_campaign_id
+            value = quest_identifier.strip()
+            if value.isdigit():
+                models = list(
+                    session.scalars(
+                        select(QuestModel).where(
+                            QuestModel.id == int(value),
+                            QuestModel.campaign_id == campaign_id,
+                        )
+                    ).all()
+                )
+            else:
+                models = list(
+                    session.scalars(
+                        select(QuestModel).where(
+                            QuestModel.title == value,
+                            QuestModel.campaign_id == campaign_id,
+                        )
+                    ).all()
+                )
+            if len(models) > 1:
+                raise AmbiguousQuestError(
+                    "More than one quest has that title; use its ID."
+                )
+            if not models:
+                raise QuestNotFoundError(
+                    f"Quest '{quest_identifier}' was not found."
+                )
+            quest_model = models[0]
+            progress_models = session.scalars(
+                select(QuestProgressModel)
+                .where(QuestProgressModel.quest_id == quest_model.id)
+                .order_by(QuestProgressModel.created_at, QuestProgressModel.id)
+            ).all()
+        return [_quest_progress(model) for model in progress_models]
+
+    def list_by_quest(
+        self,
+        guild_id: int | str,
+        quest_identifier: str,
+    ) -> Sequence[QuestProgress]:
+        """Alias for listing quest progress entries."""
+        return self.list_for_quest(guild_id, quest_identifier)
+
+
 class QuestStore:
     """Repository for quests and current campaign-scoped quest queries."""
 
     def __init__(self, database_path: str | Path) -> None:
+        self.database_path = str(Path(database_path))
         self.session_factory = create_session_factory(database_path)
 
     def create(
@@ -248,6 +415,53 @@ class QuestStore:
             model.status = "FAILED"
             model.closed_at = _now()
         return self.find(str(quest.id), campaign_id)
+
+    def create_progress(
+        self,
+        guild_id: int | str,
+        identifier: str,
+        description: str,
+    ) -> QuestProgress:
+        """Add historical progress to a quest in the current guild session."""
+        return QuestProgressStore(self.database_path).create(
+            guild_id, identifier, description
+        )
+
+    def add_progress(
+        self,
+        guild_id: int | str,
+        identifier: str,
+        description: str,
+    ) -> QuestProgress:
+        """Alias for creating a new progress record."""
+        return self.create_progress(guild_id, identifier, description)
+
+    def progress(
+        self,
+        guild_id: int | str,
+        identifier: str,
+        description: str,
+    ) -> QuestProgress:
+        """Alias for progress creation."""
+        return self.create_progress(guild_id, identifier, description)
+
+    def list_progress(
+        self,
+        guild_id: int | str,
+        identifier: str,
+    ) -> Sequence[QuestProgress]:
+        """Return the historical progress entries for a quest."""
+        return QuestProgressStore(self.database_path).list_for_quest(
+            guild_id, identifier
+        )
+
+    def progress_history(
+        self,
+        guild_id: int | str,
+        identifier: str,
+    ) -> Sequence[QuestProgress]:
+        """Alias for listing a quest's progress history."""
+        return self.list_progress(guild_id, identifier)
 
     def _current_campaign_id(self, guild_id: int | str) -> int:
         with self.session_factory() as session:
