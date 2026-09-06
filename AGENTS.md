@@ -773,6 +773,13 @@ Journal events:
     ✓ Validation and invariant checks implemented
     ✓ Covered by tests
 
+Journal UI:
+    ✓ Defined in ADR-006
+    ✓ Interactive dashboard and navigation implemented
+    ✓ Quest filtering, pagination, details, and lifecycle actions implemented
+    ✓ Progress modal and session journal details implemented
+    ✓ Covered by tests
+
 Recording:
     ☐ Future
 

@@ -63,6 +63,15 @@ class QuestProgress:
     created_at: str
 
 
+@dataclass(frozen=True)
+class SessionQuestProgress:
+    """Quest progress entry with the quest title for session views."""
+
+    quest_title: str
+    description: str
+    created_at: str
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -230,6 +239,31 @@ class QuestProgressStore:
     ) -> Sequence[QuestProgress]:
         """Alias for listing quest progress entries."""
         return self.list_for_quest(guild_id, quest_identifier)
+
+    def list_for_session(self, session_id: int) -> Sequence[SessionQuestProgress]:
+        """Return quest progress entries recorded during one session."""
+        with self.session_factory() as session:
+            rows = session.execute(
+                select(
+                    QuestModel.title,
+                    QuestProgressModel.description,
+                    QuestProgressModel.created_at,
+                )
+                .join(
+                    QuestProgressModel,
+                    QuestProgressModel.quest_id == QuestModel.id,
+                )
+                .where(QuestProgressModel.session_id == session_id)
+                .order_by(QuestProgressModel.created_at, QuestProgressModel.id)
+            ).all()
+        return [
+            SessionQuestProgress(
+                quest_title=title,
+                description=description,
+                created_at=created_at,
+            )
+            for title, description, created_at in rows
+        ]
 
 
 class QuestStore:
@@ -454,6 +488,10 @@ class QuestStore:
         return QuestProgressStore(self.database_path).list_for_quest(
             guild_id, identifier
         )
+
+    def list_for_session(self, session_id: int) -> Sequence[SessionQuestProgress]:
+        """Return quest progress entries recorded during one session."""
+        return QuestProgressStore(self.database_path).list_for_session(session_id)
 
     def progress_history(
         self,

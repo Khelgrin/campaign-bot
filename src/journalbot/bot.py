@@ -16,6 +16,7 @@ from journalbot.campaigns import (
     NoCampaignSelectedError,
 )
 from journalbot.database import get_database_path
+from journalbot.journal_ui import JournalRenderer
 from journalbot.quests import QuestError, QuestStore
 from journalbot.sessions import SessionError, SessionStore
 
@@ -101,6 +102,7 @@ LOGGED_COMMANDS = frozenset(
         "fail-quest",
         "progress-quest",
         "add-journal-event",
+        "journal",
     }
 )
 
@@ -136,6 +138,7 @@ COMMANDS_HELP = "\n".join(
         "- `!fail-quest <identifier>` — fail a quest.",
         "- `!progress-quest <identifier> description=\"...\"` — add quest progress.",
         "- `!add-journal-event description=\"...\"` — add a session journal entry.",
+        "- `!journal` — open the interactive journal panel.",
         "Named options also support `--key \"value\"`, for example "
         "`!create-quest --title \"Find the merchant\" --description \"...\"`.",
     )
@@ -539,6 +542,26 @@ class CampaignCommands(commands.Cog):
             await ctx.send(str(error))
             return
         await ctx.send(f"Journal event added to Session #{session.number}.")
+
+    @commands.command(name="journal")
+    async def journal(
+        self, ctx: commands.Context, *, arguments: str = ""
+    ) -> None:
+        """Open the interactive journal panel."""
+        if await self._parse_arguments(ctx, arguments, set()) is None:
+            return
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        renderer = JournalRenderer(
+            self.store, self.sessions, self.quests, guild_id
+        )
+        try:
+            rendered = renderer.dashboard()
+        except (CampaignError, QuestError, SessionError, ValueError) as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(embed=rendered.embed, view=rendered.view)
 
     @commands.command(name="create-quest")
     async def create_quest(
