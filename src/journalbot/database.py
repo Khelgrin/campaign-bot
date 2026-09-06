@@ -90,6 +90,9 @@ class SessionModel(Base):
         back_populates="current_session"
     )
     quests: Mapped[list["QuestModel"]] = relationship(back_populates="started_session")
+    quest_progress: Mapped[list["QuestProgressModel"]] = relationship(
+        back_populates="session"
+    )
 
 
 class QuestModel(Base):
@@ -120,6 +123,23 @@ class QuestModel(Base):
     closed_at: Mapped[str | None] = mapped_column(String, nullable=True)
     campaign: Mapped[CampaignModel] = relationship(back_populates="quests")
     started_session: Mapped[SessionModel] = relationship(back_populates="quests")
+    progress_history: Mapped[list["QuestProgressModel"]] = relationship(
+        back_populates="quest"
+    )
+
+
+class QuestProgressModel(Base):
+    """Historical record describing quest progress during one session."""
+
+    __tablename__ = "quest_progress"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    quest_id: Mapped[int] = mapped_column(ForeignKey("quests.id"), nullable=False)
+    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), nullable=False)
+    description: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    quest: Mapped[QuestModel] = relationship(back_populates="progress_history")
+    session: Mapped[SessionModel] = relationship(back_populates="quest_progress")
 
 
 class ServerContextModel(Base):

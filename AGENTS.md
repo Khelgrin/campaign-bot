@@ -757,8 +757,12 @@ Quest:
 
 QuestProgress:
     ✓ Defined in ADR-004
-    ✓ Domain model is planned/represented in the ADR and future scope
-    ⚠ Not yet implemented in the application code
+    ✓ Database schema defined
+    ✓ Lifecycle and immutability defined
+    ✓ Command support implemented
+    ✓ Guild/session context resolution implemented
+    ✓ Validation and invariant checks implemented
+    ✓ Covered by tests
 
 Journal events:
     ✓ Defined in ADR-005

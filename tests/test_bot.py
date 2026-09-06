@@ -587,6 +587,21 @@ def test_quest_commands_cover_details_listing_and_state_transitions(
 
     ctx.send.reset_mock()
     run(
+        cast(Any, cog.progress_quest.callback)(
+            cog,
+            ctx,
+            arguments=(
+                f'{quest_id} description="Found tracks toward the abandoned mine."'
+            ),
+        )
+    )
+    response = ctx.send.await_args.args[0]
+    assert "Quest: Find the Merchant" in response
+    assert "Session: #1" in response
+    assert 'Progress added:\n"Found tracks toward the abandoned mine."' in response
+
+    ctx.send.reset_mock()
+    run(
         cast(Any, cog.quest_details.callback)(
             cog, ctx, arguments=str(quest_id)
         )
@@ -598,6 +613,8 @@ def test_quest_commands_cover_details_listing_and_state_transitions(
     assert "Quest giver: Mayor Menhemes" in response
     assert "Received at location: Otari" in response
     assert "Description: Find the missing merchant." in response
+    assert "Progress history:" in response
+    assert "Session #1: Found tracks toward the abandoned mine." in response
 
     ctx.send.reset_mock()
     run(
@@ -745,6 +762,7 @@ def test_command_validation_reports_usage_errors(
         "list_quests",
         "complete_quest",
         "fail_quest",
+        "progress_quest",
     ],
 )
 def test_all_commands_reject_direct_messages(tmp_path, command: str) -> None:
@@ -777,6 +795,7 @@ def test_all_commands_reject_direct_messages(tmp_path, command: str) -> None:
         "list_quests": "",
         "complete_quest": "1",
         "fail_quest": "1",
+        "progress_quest": "1 description=Progress",
     }[command]
 
     run(

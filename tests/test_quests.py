@@ -12,6 +12,7 @@ from journalbot.database import (
 from journalbot.quests import (
     AmbiguousQuestError,
     QuestNotFoundError,
+    QuestProgressStore,
     QuestStore,
 )
 from journalbot.sessions import SessionStore
@@ -213,3 +214,71 @@ def test_quest_status_filter_uses_campaign_context(tmp_path) -> None:
 
     with pytest.raises(QuestNotFoundError):
         store.find("Missing Quest", CampaignStore(path).current(123).id)
+
+
+def test_quest_progress_records_history_for_current_session_and_quest(
+    tmp_path,
+) -> None:
+    """Quest progress creates immutable history tied to the current campaign/session."""
+    path = tmp_path / "journalbot.sqlite3"
+    CampaignStore(path).create(123, "Kingmaker", None)
+    SessionStore(path).create(123, "Session 1")
+    quest = QuestStore(path).create(123, "Rescue the Merchant")
+
+    progress = QuestStore(path).create_progress(
+        123,
+        str(quest.id),
+        "Found tracks leading to the abandoned mine.",
+    )
+
+    assert progress.quest_id == quest.id
+    assert progress.session_id > 0
+    assert progress.description == "Found tracks leading to the abandoned mine."
+    assert [
+        item.description
+        for item in QuestStore(path).list_progress(123, str(quest.id))
+    ] == [progress.description]
+    assert [
+        item.description
+        for item in QuestStore(path).progress_history(123, str(quest.id))
+    ] == [progress.description]
+    assert [
+        item.description
+        for item in QuestProgressStore(path).list_by_quest(123, str(quest.id))
+    ] == [progress.description]
+
+    QuestStore(path).complete(123, str(quest.id))
+    with pytest.raises(ValueError):
+        QuestStore(path).create_progress(
+            123,
+            str(quest.id),
+            "This should be rejected.",
+        )
+
+
+def test_quest_progress_requires_valid_campaign_session_and_active_quest(
+    tmp_path,
+) -> None:
+    """Quest progress is rejected without campaign context or for closed quests."""
+    path = tmp_path / "journalbot.sqlite3"
+    store = QuestProgressStore(path)
+
+    with pytest.raises(Exception):
+        store.create(123, "Rescue the Merchant", "progress")
+
+    CampaignStore(path).create(123, "Kingmaker", None)
+    with pytest.raises(Exception):
+        store.create(123, "Rescue the Merchant", "progress")
+
+    SessionStore(path).create(123, "Session 1")
+    quest = QuestStore(path).create(123, "Rescue the Merchant")
+
+    with pytest.raises(QuestNotFoundError):
+        store.list_for_quest(123, "Missing Quest")
+
+    with pytest.raises(ValueError):
+        store.create(123, str(quest.id), "")
+
+    QuestStore(path).complete(123, str(quest.id))
+    with pytest.raises(ValueError):
+        store.create(123, str(quest.id), "No longer allowed")

@@ -99,6 +99,7 @@ LOGGED_COMMANDS = frozenset(
         "list-quests",
         "complete-quest",
         "fail-quest",
+        "progress-quest",
     }
 )
 
@@ -132,6 +133,7 @@ COMMANDS_HELP = "\n".join(
         "list quests.",
         "- `!complete-quest <identifier>` — complete a quest.",
         "- `!fail-quest <identifier>` — fail a quest.",
+        "- `!progress-quest <identifier> description=\"...\"` — add quest progress.",
         "Named options also support `--key \"value\"`, for example "
         "`!create-quest --title \"Find the merchant\" --description \"...\"`.",
     )
@@ -600,7 +602,8 @@ class CampaignCommands(commands.Cog):
         except (CampaignError, QuestError, SessionError) as error:
             await ctx.send(str(error))
             return
-        await ctx.send(
+        progress_history = self.quests.list_progress(guild_id, options["identifier"])
+        lines = [
             f"ID: {quest.id}\nCampaign ID: {quest.campaign_id}\n"
             f"Title: {quest.title}\nStatus: {quest.status}\n"
             f"Quest giver: {quest.quest_giver or '(none)'}\n"
@@ -608,7 +611,20 @@ class CampaignCommands(commands.Cog):
             f"Started in session: {quest.started_session_id}\n"
             f"Description: {quest.description or '(none)'}\n"
             f"Closed at: {quest.closed_at or '(ongoing)'}"
-        )
+        ]
+        if progress_history:
+            items = []
+            for entry in progress_history:
+                try:
+                    session = self.sessions.find(
+                        str(entry.session_id), quest.campaign_id
+                    )
+                    label = f"Session #{session.number}"
+                except SessionError:
+                    label = f"Session {entry.session_id}"
+                items.append(f"{label}: {entry.description}")
+            lines.append("\nProgress history:\n" + "\n".join(items))
+        await ctx.send("".join(lines))
 
     @commands.command(name="list-quests")
     async def list_quests(
@@ -683,6 +699,42 @@ class CampaignCommands(commands.Cog):
             await ctx.send(str(error))
             return
         await ctx.send(f"Quest **{quest.title}** marked as failed.")
+
+    @commands.command(name="progress-quest")
+    async def progress_quest(
+        self, ctx: commands.Context, *, arguments: str = ""
+    ) -> None:
+        """Add a historical progress entry to the current quest."""
+        options = await self._parse_arguments(
+            ctx,
+            arguments,
+            {"identifier", "description"},
+            {"identifier", "description"},
+            positional_identifier=True,
+        )
+        if options is None:
+            return
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        try:
+            quest = self.quests.find(
+                options["identifier"], self.store.current(guild_id).id
+            )
+            progress_entry = self.quests.add_progress(
+                guild_id,
+                options["identifier"],
+                options["description"],
+            )
+        except (CampaignError, QuestError, SessionError, ValueError) as error:
+            await ctx.send(str(error))
+            return
+        session = self.sessions.current(guild_id)
+        await ctx.send(
+            f"Quest: {quest.title}\n"
+            f"Session: #{session.number}\n\n"
+            f'Progress added:\n"{progress_entry.description}"'
+        )
 
 
 class JournalBot(commands.Bot):
