@@ -444,6 +444,13 @@ def test_session_commands_cover_lifecycle_and_context(tmp_path) -> None:
         )
     )
     assert "Journal event added to Session #1." in ctx.send.await_args.args[0]
+    run(
+        cast(Any, cog.add_journal_event.callback)(
+            cog,
+            ctx,
+            arguments='description="The party found a hidden passage."',
+        )
+    )
 
     ctx.send.reset_mock()
     run(
@@ -454,6 +461,10 @@ def test_session_commands_cover_lifecycle_and_context(tmp_path) -> None:
     read_response = ctx.send.await_args.args[0]
     assert "Journal events:" in read_response
     assert "The party discovered an ancient shrine." in read_response
+    assert (
+        "- The party discovered an ancient shrine.\n"
+        "- The party found a hidden passage."
+    ) in read_response
 
     ctx.send.reset_mock()
     run(

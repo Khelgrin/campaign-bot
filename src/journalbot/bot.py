@@ -454,8 +454,10 @@ class CampaignCommands(commands.Cog):
             f"Ended at: {session.ended_at or '(ongoing)'}"
         ]
         if events:
-            lines.append("\nJournal events:\n")
-            lines.extend(f"- {event.description}" for event in events)
+            lines.append(
+                "\nJournal events:\n"
+                + "\n".join(f"- {event.description}" for event in events)
+            )
         await ctx.send("".join(lines))
 
     @commands.command(name="update-session")
