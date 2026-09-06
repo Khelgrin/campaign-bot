@@ -192,11 +192,11 @@ The proposed MVP command interface is:
 
 | Command | Description |
 | --- | --- |
-| `!start-session [title] [description]` | Create an active session under the current campaign and select it |
-| `!use-session <number, id, or title>` | Select a session in the current campaign |
+| `!start-session [title="..."] [description="..."]` | Create an active session under the current campaign and select it |
+| `!use-session <identifier>` | Select a session in the current campaign |
 | `!list-session` | List sessions for the current campaign with number, ID, title, and status |
-| `!read-session <id or title>` | Display complete session details |
-| `!update-session <id or title> [title] [description] [played_at]` | Update session metadata without changing its ID or number |
+| `!read-session <identifier>` | Display complete session details |
+| `!update-session <identifier> [title="..."] [description="..."] [played_at="..."]` | Update session metadata without changing its ID or number |
 | `!end-session` | End the current session and retain its data |
 
 The command names follow the existing text-command implementation. If the

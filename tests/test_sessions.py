@@ -21,7 +21,11 @@ from journalbot.sessions import (
 
 
 def test_session_creation_assigns_number_and_persists_context(tmp_path) -> None:
-    """Creating a session selects it and survives a new store instance."""
+    """
+    Creating a session selects it and survives a new store instance. This exercises the
+    `session creation assigns number and persists context` scenario and asserts the
+    expected observable result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaign = CampaignStore(path).create(123, "Kingmaker", None)
 
@@ -36,7 +40,11 @@ def test_session_creation_assigns_number_and_persists_context(tmp_path) -> None:
 
 
 def test_selected_session_survives_a_new_store_instance(tmp_path) -> None:
-    """Selecting a session persists the guild context across restarts."""
+    """
+    Selecting a session persists the guild context across restarts. This exercises the
+    `selected session survives a new store instance` scenario and asserts the expected
+    observable result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     CampaignStore(path).create(123, "Kingmaker", None)
     sessions = SessionStore(path)
@@ -53,7 +61,10 @@ def test_selected_session_survives_a_new_store_instance(tmp_path) -> None:
 
 
 def test_session_requires_current_active_campaign(tmp_path) -> None:
-    """Session creation reports missing and ended campaign context."""
+    """
+    Session creation is attempted without a campaign and after the selected campaign has
+    ended. This verifies missing context and ended-campaign context are both rejected.
+    """
     store = SessionStore(tmp_path / "journalbot.sqlite3")
     with pytest.raises(NoCampaignSelectedError):
         store.create(123)
@@ -66,7 +77,11 @@ def test_session_requires_current_active_campaign(tmp_path) -> None:
 
 
 def test_only_one_active_session_and_campaign_end_is_guarded(tmp_path) -> None:
-    """An active session blocks both another session and campaign ending."""
+    """
+    A campaign already has an ACTIVE session when another session is started and the
+    campaign is ended. This verifies both operations are rejected until the active
+    session is ended.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaigns = CampaignStore(path)
     campaigns.create(123, "Kingmaker", None)
@@ -84,7 +99,11 @@ def test_only_one_active_session_and_campaign_end_is_guarded(tmp_path) -> None:
 
 
 def test_session_selection_cannot_switch_campaign_context(tmp_path) -> None:
-    """A session from another campaign cannot be selected."""
+    """
+    A session from another campaign cannot be selected. This exercises the `session
+    selection cannot switch campaign context` scenario and asserts the expected
+    observable result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaigns = CampaignStore(path)
     campaigns.create(123, "First", None)
@@ -102,7 +121,11 @@ def test_session_selection_cannot_switch_campaign_context(tmp_path) -> None:
 
 
 def test_numeric_session_selection_stays_in_current_campaign(tmp_path) -> None:
-    """A session number is resolved within the current campaign first."""
+    """
+    A session number is resolved within the current campaign first. This exercises the
+    `numeric session selection stays in current campaign` scenario and asserts the
+    expected observable result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaigns = CampaignStore(path)
     first = campaigns.create(123, "First", None)
@@ -121,7 +144,11 @@ def test_numeric_session_selection_stays_in_current_campaign(tmp_path) -> None:
 
 
 def test_switching_campaign_clears_session_from_previous_campaign(tmp_path) -> None:
-    """Campaign selection cannot leave a session from another campaign current."""
+    """
+    A guild switches campaigns while a session from the old campaign is selected. This
+    verifies the old current-session reference is cleared instead of pointing across
+    campaigns.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaigns = CampaignStore(path)
     first = campaigns.create(123, "First", None)
@@ -136,7 +163,11 @@ def test_switching_campaign_clears_session_from_previous_campaign(tmp_path) -> N
 
 
 def test_session_update_preserves_id_and_number_and_corrects_metadata(tmp_path) -> None:
-    """Metadata updates preserve identity while allowing played date correction."""
+    """
+    Metadata updates preserve identity while allowing played date correction. This
+    exercises the `session update preserves id and number and corrects metadata`
+    scenario and asserts the expected observable result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaigns = CampaignStore(path)
     campaigns.create(123, "Kingmaker", None)
@@ -155,7 +186,11 @@ def test_session_update_preserves_id_and_number_and_corrects_metadata(tmp_path) 
 
 
 def test_session_requires_non_empty_title(tmp_path) -> None:
-    """Explicit blank titles are rejected while omitted titles are generated."""
+    """
+    Explicit blank titles are rejected while omitted titles are generated. This
+    exercises the `session requires non empty title` scenario and asserts the expected
+    observable result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     CampaignStore(path).create(123, "Kingmaker", None)
     sessions = SessionStore(path)
@@ -165,7 +200,11 @@ def test_session_requires_non_empty_title(tmp_path) -> None:
 
 
 def test_session_titles_and_numbers_are_unique_per_campaign(tmp_path) -> None:
-    """A campaign cannot contain duplicate titles or numbers."""
+    """
+    A campaign cannot contain duplicate titles or numbers. This exercises the `session
+    titles and numbers are unique per campaign` scenario and asserts the expected
+    observable result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaigns = CampaignStore(path)
     campaign = campaigns.create(123, "Kingmaker", None)
@@ -196,7 +235,11 @@ def test_session_titles_and_numbers_are_unique_per_campaign(tmp_path) -> None:
 def test_database_enforces_positive_session_numbers_and_one_active_session(
     tmp_path,
 ) -> None:
-    """The schema rejects non-positive numbers and duplicate active sessions."""
+    """
+    The database attempts to insert session number 0 and then a second ACTIVE session in
+    one campaign. This verifies positive numbering and the one-active-session constraint
+    reject both invalid records.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaign = CampaignStore(path).create(123, "Kingmaker", None)
     factory = create_session_factory(path)
@@ -246,7 +289,10 @@ def test_database_enforces_positive_session_numbers_and_one_active_session(
 
 
 def test_database_requires_a_session_campaign_foreign_key(tmp_path) -> None:
-    """The schema rejects sessions without a campaign."""
+    """
+    The database attempts to insert a session whose `campaign_id` is null. This verifies
+    the foreign-key requirement rejects orphan sessions.
+    """
     path = tmp_path / "journalbot.sqlite3"
     factory = create_session_factory(path)
 
@@ -267,7 +313,11 @@ def test_database_requires_a_session_campaign_foreign_key(tmp_path) -> None:
 
 
 def test_session_can_be_selected_by_exact_title(tmp_path) -> None:
-    """Title lookup selects the exact session in the current campaign."""
+    """
+    Title lookup selects the exact session in the current campaign. This exercises the
+    `session can be selected by exact title` scenario and asserts the expected
+    observable result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     CampaignStore(path).create(123, "Kingmaker", None)
     created = SessionStore(path).create(123, "Opening")
@@ -281,7 +331,11 @@ def test_session_can_be_selected_by_exact_title(tmp_path) -> None:
 
 
 def test_session_update_rejects_duplicate_title(tmp_path) -> None:
-    """Updating a title cannot collide with another session in its campaign."""
+    """
+    Updating a title cannot collide with another session in its campaign. This exercises
+    the `session update rejects duplicate title` scenario and asserts the expected
+    observable result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     CampaignStore(path).create(123, "Kingmaker", None)
     sessions = SessionStore(path)
@@ -302,7 +356,11 @@ def test_session_update_rejects_duplicate_title(tmp_path) -> None:
 def test_database_enforces_session_lifecycle(
     tmp_path, status: str, ended_at: str | None
 ) -> None:
-    """The schema rejects invalid session lifecycle state."""
+    """
+    The database attempts ACTIVE with `ended_at` filled, ENDED with `ended_at` missing,
+    and an unknown status. This verifies the session lifecycle constraint rejects every
+    inconsistent status/timestamp combination.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaign = CampaignStore(path).create(123, "Kingmaker", None)
     factory = create_session_factory(path)
@@ -324,7 +382,11 @@ def test_database_enforces_session_lifecycle(
 
 
 def test_session_listing_and_lookup_are_scoped_to_current_campaign(tmp_path) -> None:
-    """Listing and lookup never return sessions from another campaign."""
+    """
+    Listing and lookup never return sessions from another campaign. This exercises the
+    `session listing and lookup are scoped to current campaign` scenario and asserts the
+    expected observable result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaigns = CampaignStore(path)
     first = campaigns.create(123, "First", None)
@@ -343,7 +405,11 @@ def test_session_listing_and_lookup_are_scoped_to_current_campaign(tmp_path) -> 
 
 
 def test_ending_session_preserves_record_and_is_idempotent(tmp_path) -> None:
-    """Ending retains timestamps and repeated ending leaves the state unchanged."""
+    """
+    The current session is ended twice. This verifies the first call stores the terminal
+    timestamp and the second call preserves the same ended record without changing its
+    history.
+    """
     path = tmp_path / "journalbot.sqlite3"
     campaigns = CampaignStore(path)
     campaigns.create(123, "Kingmaker", None)
@@ -362,7 +428,11 @@ def test_ending_session_preserves_record_and_is_idempotent(tmp_path) -> None:
 
 
 def test_missing_session_context_is_explicit(tmp_path) -> None:
-    """Session-dependent operations fail without a selected session."""
+    """
+    Session-dependent operations fail without a selected session. This exercises the
+    `missing session context is explicit` scenario and asserts the expected observable
+    result or error.
+    """
     path = tmp_path / "journalbot.sqlite3"
     CampaignStore(path).create(123, "Kingmaker", None)
 

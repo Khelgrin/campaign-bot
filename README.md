@@ -57,8 +57,10 @@ the intended deployment configuration: set the secret in the chosen host's secre
 manager or environment-variable settings, rather than uploading a `.env` file.
 Hosting and deployment infrastructure remain intentionally undecided.
 
-The bot connects to Discord, logs when it is ready, and supports campaign and
-session commands such as `!start-campaign`, `!use-campaign`, `!list-campaign`,
-`!read-campaign`, `!update-campaign`, `!end-campaign`, `!start-session`,
-`!use-session`, `!list-session`, `!read-session`, `!update-session`, and
-`!end-session`. Send `Bot: help` or `Bot: commands` to list them.
+The bot connects to Discord, logs when it is ready, and supports campaign,
+session, and quest commands such as `!start-campaign`, `!use-campaign`,
+`!list-campaign`, `!read-campaign`, `!update-campaign`, `!end-campaign`,
+`!start-session`, `!use-session`, `!list-session`, `!read-session`,
+`!update-session`, `!end-session`, `!create-quest`, `!update-quest`,
+`!quest-details`, `!list-quests`, `!complete-quest`, and `!fail-quest`.
+Send `Bot: help` or `Bot: commands` to list them.

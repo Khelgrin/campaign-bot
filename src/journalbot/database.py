@@ -50,6 +50,7 @@ class CampaignModel(Base):
     sessions: Mapped[list["SessionModel"]] = relationship(
         back_populates="campaign"
     )
+    quests: Mapped[list["QuestModel"]] = relationship(back_populates="campaign")
 
 
 class SessionModel(Base):
@@ -88,6 +89,37 @@ class SessionModel(Base):
     contexts: Mapped[list["ServerContextModel"]] = relationship(
         back_populates="current_session"
     )
+    quests: Mapped[list["QuestModel"]] = relationship(back_populates="started_session")
+
+
+class QuestModel(Base):
+    """Persistent quest record."""
+
+    __tablename__ = "quests"
+    __table_args__ = (
+        CheckConstraint(
+            "(status = 'ACTIVE' AND closed_at IS NULL) OR "
+            "(status IN ('COMPLETED', 'FAILED') AND closed_at IS NOT NULL)",
+            name="quest_lifecycle",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(
+        ForeignKey("campaigns.id"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    quest_giver: Mapped[str | None] = mapped_column(String, nullable=True)
+    received_at_location: Mapped[str | None] = mapped_column(String, nullable=True)
+    started_session_id: Mapped[int] = mapped_column(
+        ForeignKey("sessions.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    closed_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    campaign: Mapped[CampaignModel] = relationship(back_populates="quests")
+    started_session: Mapped[SessionModel] = relationship(back_populates="quests")
 
 
 class ServerContextModel(Base):

@@ -19,7 +19,11 @@ from journalbot.database import (
 
 
 def test_create_initializes_an_active_campaign(tmp_path) -> None:
-    """Creating a campaign sets its required initial lifecycle fields."""
+    """
+    Creating a campaign sets its required initial lifecycle fields. This exercises the
+    `create initializes an active campaign` scenario and asserts the expected observable
+    result or error.
+    """
     campaign = CampaignStore(tmp_path / "journalbot.sqlite3").create(
         123, "Kingmaker", "Stolen land"
     )
@@ -33,7 +37,11 @@ def test_create_initializes_an_active_campaign(tmp_path) -> None:
 
 
 def test_find_reads_campaigns_by_id_or_exact_title(tmp_path) -> None:
-    """Campaigns can be read using either supported identifier form."""
+    """
+    Campaigns can be read using either supported identifier form. This exercises the
+    `find reads campaigns by id or exact title` scenario and asserts the expected
+    observable result or error.
+    """
     store = CampaignStore(tmp_path / "journalbot.sqlite3")
     campaign = store.create(123, "Kingmaker", None)
 
@@ -42,7 +50,11 @@ def test_find_reads_campaigns_by_id_or_exact_title(tmp_path) -> None:
 
 
 def test_find_rejects_missing_and_ambiguous_campaigns(tmp_path) -> None:
-    """Invalid identifiers produce explicit errors rather than guesses."""
+    """
+    Invalid identifiers produce explicit errors rather than guesses. This exercises the
+    `find rejects missing and ambiguous campaigns` scenario and asserts the expected
+    observable result or error.
+    """
     store = CampaignStore(tmp_path / "journalbot.sqlite3")
     store.create(123, "Duplicate", None)
     store.create(456, "Duplicate", None)
@@ -54,7 +66,11 @@ def test_find_rejects_missing_and_ambiguous_campaigns(tmp_path) -> None:
 
 
 def test_update_changes_metadata_without_changing_id(tmp_path) -> None:
-    """Updating metadata preserves the campaign's stable identifier."""
+    """
+    Updating metadata preserves the campaign's stable identifier. This exercises the
+    `update changes metadata without changing id` scenario and asserts the expected
+    observable result or error.
+    """
     store = CampaignStore(tmp_path / "journalbot.sqlite3")
     campaign = store.create(123, "Original", "Old description")
 
@@ -68,7 +84,11 @@ def test_update_changes_metadata_without_changing_id(tmp_path) -> None:
 
 
 def test_campaign_context_survives_a_new_store_instance(tmp_path) -> None:
-    """The selected campaign is read back from the database after a restart."""
+    """
+    The selected campaign is read back from the database after a restart. This exercises
+    the `campaign context survives a new store instance` scenario and asserts the
+    expected observable result or error.
+    """
     database_path = tmp_path / "journalbot.sqlite3"
     campaign = CampaignStore(database_path).create(123, "Kingmaker", "Stolen land")
 
@@ -78,7 +98,11 @@ def test_campaign_context_survives_a_new_store_instance(tmp_path) -> None:
 
 
 def test_starting_a_campaign_replaces_only_the_guild_context(tmp_path) -> None:
-    """Guilds have independent contexts and creating does not end old campaigns."""
+    """
+    Guilds have independent contexts and creating does not end old campaigns. This
+    exercises the `starting a campaign replaces only the guild context` scenario and
+    asserts the expected observable result or error.
+    """
     store = CampaignStore(tmp_path / "journalbot.sqlite3")
     first = store.create(123, "First", None)
     second = store.create(123, "Second", None)
@@ -90,7 +114,11 @@ def test_starting_a_campaign_replaces_only_the_guild_context(tmp_path) -> None:
 
 
 def test_switching_campaign_is_rejected_with_an_active_session(tmp_path) -> None:
-    """A guild cannot leave a campaign while its session is active."""
+    """
+    A guild cannot leave a campaign while its session is active. This exercises the
+    `switching campaign is rejected with an active session` scenario and asserts the
+    expected observable result or error.
+    """
     from journalbot.sessions import SessionStore
 
     database_path = tmp_path / "journalbot.sqlite3"
@@ -108,7 +136,11 @@ def test_switching_campaign_is_rejected_with_an_active_session(tmp_path) -> None
 
 
 def test_guild_has_one_persisted_context_row(tmp_path) -> None:
-    """Repeated selections update one guild context instead of creating rows."""
+    """
+    Repeated selections update one guild context instead of creating rows. This
+    exercises the `guild has one persisted context row` scenario and asserts the
+    expected observable result or error.
+    """
     database_path = tmp_path / "journalbot.sqlite3"
     store = CampaignStore(database_path)
     first = store.create(123, "First", None)
@@ -130,7 +162,11 @@ def test_guild_has_one_persisted_context_row(tmp_path) -> None:
 
 
 def test_select_persists_for_a_new_store_instance(tmp_path) -> None:
-    """Selecting a campaign remains effective after reopening the database."""
+    """
+    Selecting a campaign remains effective after reopening the database. This exercises
+    the `select persists for a new store instance` scenario and asserts the expected
+    observable result or error.
+    """
     database_path = tmp_path / "journalbot.sqlite3"
     store = CampaignStore(database_path)
     first = store.create(123, "First", None)
@@ -143,7 +179,11 @@ def test_select_persists_for_a_new_store_instance(tmp_path) -> None:
 
 
 def test_missing_context_is_explicit(tmp_path) -> None:
-    """A guild without a selection cannot resolve a current campaign."""
+    """
+    A guild without a selection cannot resolve a current campaign. This exercises the
+    `missing context is explicit` scenario and asserts the expected observable result or
+    error.
+    """
     store = CampaignStore(tmp_path / "journalbot.sqlite3")
 
     with pytest.raises(
@@ -153,7 +193,11 @@ def test_missing_context_is_explicit(tmp_path) -> None:
 
 
 def test_ending_preserves_data_and_sets_end_timestamp(tmp_path) -> None:
-    """Ending a campaign changes lifecycle state without deleting it."""
+    """
+    Ending a campaign changes lifecycle state without deleting it. This exercises the
+    `ending preserves data and sets end timestamp` scenario and asserts the expected
+    observable result or error.
+    """
     store = CampaignStore(tmp_path / "journalbot.sqlite3")
     campaign = store.create(123, "Finished", None)
 
@@ -166,7 +210,11 @@ def test_ending_preserves_data_and_sets_end_timestamp(tmp_path) -> None:
 
 
 def test_ended_campaign_can_still_be_selected_and_read(tmp_path) -> None:
-    """Ending a campaign does not prevent later selection or reading."""
+    """
+    Ending a campaign does not prevent later selection or reading. This exercises the
+    `ended campaign can still be selected and read` scenario and asserts the expected
+    observable result or error.
+    """
     store = CampaignStore(tmp_path / "journalbot.sqlite3")
     campaign = store.create(123, "Finished", None)
     store.end_current(123)
@@ -185,7 +233,11 @@ def test_ended_campaign_can_still_be_selected_and_read(tmp_path) -> None:
 def test_database_enforces_campaign_lifecycle_invariants(
     tmp_path, status: str, ended_at: str | None
 ) -> None:
-    """The schema rejects inconsistent status and ended_at values."""
+    """
+    The database attempts ACTIVE with `ended_at` filled, ENDED with `ended_at` missing,
+    and an unknown status. This verifies the campaign lifecycle constraint rejects every
+    inconsistent status/timestamp combination.
+    """
     database_path = tmp_path / "journalbot.sqlite3"
     session_factory = create_session_factory(database_path)
     with pytest.raises(IntegrityError):
