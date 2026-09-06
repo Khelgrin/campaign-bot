@@ -561,7 +561,7 @@ class CampaignCommands(commands.Cog):
         except (CampaignError, QuestError, SessionError, ValueError) as error:
             await ctx.send(str(error))
             return
-        await ctx.send(embed=rendered.embed, view=rendered.view)
+        await ctx.send(view=rendered.view)
 
     @commands.command(name="create-quest")
     async def create_quest(
