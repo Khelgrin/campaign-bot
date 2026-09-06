@@ -437,6 +437,26 @@ def test_session_commands_cover_lifecycle_and_context(tmp_path) -> None:
 
     ctx.send.reset_mock()
     run(
+        cast(Any, cog.add_journal_event.callback)(
+            cog,
+            ctx,
+            arguments='description="The party discovered an ancient shrine."',
+        )
+    )
+    assert "Journal event added to Session #1." in ctx.send.await_args.args[0]
+
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.read_session.callback)(
+            cog, ctx, arguments=str(session.id)
+        )
+    )
+    read_response = ctx.send.await_args.args[0]
+    assert "Journal events:" in read_response
+    assert "The party discovered an ancient shrine." in read_response
+
+    ctx.send.reset_mock()
+    run(
         cast(Any, cog.update_session.callback)(
             cog,
             ctx,
@@ -763,6 +783,7 @@ def test_command_validation_reports_usage_errors(
         "complete_quest",
         "fail_quest",
         "progress_quest",
+        "add_journal_event",
     ],
 )
 def test_all_commands_reject_direct_messages(tmp_path, command: str) -> None:
@@ -796,6 +817,7 @@ def test_all_commands_reject_direct_messages(tmp_path, command: str) -> None:
         "complete_quest": "1",
         "fail_quest": "1",
         "progress_quest": "1 description=Progress",
+        "add_journal_event": 'description="Session event"',
     }[command]
 
     run(

@@ -438,3 +438,30 @@ def test_missing_session_context_is_explicit(tmp_path) -> None:
 
     with pytest.raises(NoSessionSelectedError):
         SessionStore(path).current(123)
+
+
+def test_session_journal_events_are_stored_and_listed_per_session(tmp_path) -> None:
+    """Session-level journal events are historical and scoped to the active session."""
+    path = tmp_path / "journalbot.sqlite3"
+    CampaignStore(path).create(123, "Kingmaker", None)
+    session = SessionStore(path).create(123, "Opening")
+
+    event = SessionStore(path).create_journal_event(
+        123,
+        "The party discovered an ancient shrine beneath the ruins.",
+    )
+
+    assert event.session_id == session.id
+    assert (
+        event.description
+        == "The party discovered an ancient shrine beneath the ruins."
+    )
+    assert [
+        item.description
+        for item in SessionStore(path).list_journal_events(123)
+    ] == [event.description]
+
+    SessionStore(path).end_current(123)
+    assert [
+        item.description for item in SessionStore(path).list_journal_events(123)
+    ] == [event.description]

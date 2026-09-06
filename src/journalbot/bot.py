@@ -100,6 +100,7 @@ LOGGED_COMMANDS = frozenset(
         "complete-quest",
         "fail-quest",
         "progress-quest",
+        "add-journal-event",
     }
 )
 
@@ -134,6 +135,7 @@ COMMANDS_HELP = "\n".join(
         "- `!complete-quest <identifier>` — complete a quest.",
         "- `!fail-quest <identifier>` — fail a quest.",
         "- `!progress-quest <identifier> description=\"...\"` — add quest progress.",
+        "- `!add-journal-event description=\"...\"` — add a session journal entry.",
         "Named options also support `--key \"value\"`, for example "
         "`!create-quest --title \"Find the merchant\" --description \"...\"`.",
     )
@@ -442,14 +444,19 @@ class CampaignCommands(commands.Cog):
         except (CampaignError, SessionError) as error:
             await ctx.send(str(error))
             return
-        await ctx.send(
+        events = self.sessions.list_journal_events(guild_id)
+        lines = [
             f"ID: {session.id}\nCampaign ID: {session.campaign_id}\n"
             f"Number: {session.number}\nTitle: {session.title}\n"
             f"Description: {session.description or '(none)'}\n"
             f"Status: {session.status}\nCreated at: {session.created_at}\n"
             f"Played at: {session.played_at}\n"
             f"Ended at: {session.ended_at or '(ongoing)'}"
-        )
+        ]
+        if events:
+            lines.append("\nJournal events:\n")
+            lines.extend(f"- {event.description}" for event in events)
+        await ctx.send("".join(lines))
 
     @commands.command(name="update-session")
     async def update_session(
@@ -503,6 +510,33 @@ class CampaignCommands(commands.Cog):
             await ctx.send(str(error))
             return
         await ctx.send(f"Session **{session.title}** ended.")
+
+    @commands.command(name="add-journal-event")
+    async def add_journal_event(
+        self, ctx: commands.Context, *, arguments: str = ""
+    ) -> None:
+        """Add a historical session-level journal event."""
+        options = await self._parse_arguments(
+            ctx,
+            arguments,
+            {"description"},
+            {"description"},
+        )
+        if options is None:
+            return
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        try:
+            self.sessions.create_journal_event(
+                guild_id,
+                options["description"],
+            )
+            session = self.sessions.current(guild_id)
+        except (CampaignError, SessionError, ValueError) as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(f"Journal event added to Session #{session.number}.")
 
     @commands.command(name="create-quest")
     async def create_quest(

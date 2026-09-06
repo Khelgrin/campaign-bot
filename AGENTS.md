@@ -766,7 +766,12 @@ QuestProgress:
 
 Journal events:
     ✓ Defined in ADR-005
-    ⚠ Not yet implemented in the application code
+    ✓ Database schema defined
+    ✓ Session-level lifecycle and immutability defined
+    ✓ Command support implemented
+    ✓ Session context resolution implemented
+    ✓ Validation and invariant checks implemented
+    ✓ Covered by tests
 
 Recording:
     ☐ Future

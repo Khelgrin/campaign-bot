@@ -93,7 +93,9 @@ class SessionModel(Base):
     quest_progress: Mapped[list["QuestProgressModel"]] = relationship(
         back_populates="session"
     )
-
+    journal_events: Mapped[list["JournalEventModel"]] = relationship(
+        back_populates="session"
+    )
 
 class QuestModel(Base):
     """Persistent quest record."""
@@ -140,6 +142,18 @@ class QuestProgressModel(Base):
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     quest: Mapped[QuestModel] = relationship(back_populates="progress_history")
     session: Mapped[SessionModel] = relationship(back_populates="quest_progress")
+
+
+class JournalEventModel(Base):
+    """Historical session-level event that is not tied to a specific quest."""
+
+    __tablename__ = "journal_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), nullable=False)
+    description: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    session: Mapped[SessionModel] = relationship(back_populates="journal_events")
 
 
 class ServerContextModel(Base):
