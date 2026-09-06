@@ -357,10 +357,14 @@ class SessionStore:
     def list_journal_events(self, guild_id: int | str) -> list[JournalEvent]:
         """Return the historical session-level events for the current session."""
         current = self.current(guild_id)
+        return self.list_journal_events_for_session(current.id)
+
+    def list_journal_events_for_session(self, session_id: int) -> list[JournalEvent]:
+        """Return historical session-level events for a specific session."""
         with self.session_factory() as session:
             models = session.scalars(
                 select(JournalEventModel)
-                .where(JournalEventModel.session_id == current.id)
+                .where(JournalEventModel.session_id == session_id)
                 .order_by(JournalEventModel.created_at, JournalEventModel.id)
             ).all()
         return [_journal_event(model) for model in models]

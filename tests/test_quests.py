@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from journalbot.campaigns import CampaignStore
 from journalbot.database import (
+    QuestProgressModel,
     QuestModel,
     ServerContextModel,
     create_session_factory,
@@ -282,3 +283,100 @@ def test_quest_progress_requires_valid_campaign_session_and_active_quest(
     QuestStore(path).complete(123, str(quest.id))
     with pytest.raises(ValueError):
         store.create(123, str(quest.id), "No longer allowed")
+
+
+def test_quest_progress_preserves_history_across_sessions_and_keeps_quest_active(
+    tmp_path,
+) -> None:
+    """Progress remains ordered and persistent while Quest status stays unchanged."""
+    path = tmp_path / "journalbot.sqlite3"
+    CampaignStore(path).create(123, "Kingmaker", None)
+    sessions = SessionStore(path)
+    first_session = sessions.create(123, "Opening")
+    quests = QuestStore(path)
+    quest = quests.create(123, "Find the Merchant")
+
+    first = quests.create_progress(123, str(quest.id), "Found the merchant's cart.")
+    assert quests.find(str(quest.id), quest.campaign_id).status == "ACTIVE"
+
+    sessions.end_current(123)
+    second_session = sessions.create(123, "Investigation")
+    second = quests.create_progress(
+        123,
+        str(quest.id),
+        "Discovered who kidnapped the merchant.",
+    )
+
+    reopened = QuestStore(path)
+    history = reopened.list_progress(123, str(quest.id))
+
+    assert first.session_id == first_session.id
+    assert second.session_id == second_session.id
+    assert [entry.id for entry in history] == [first.id, second.id]
+    assert [entry.description for entry in history] == [
+        "Found the merchant's cart.",
+        "Discovered who kidnapped the merchant.",
+    ]
+    assert reopened.find(str(quest.id), quest.campaign_id).status == "ACTIVE"
+
+
+def test_quest_progress_rejects_a_session_from_another_campaign(tmp_path) -> None:
+    """Progress cannot combine a Quest and current Session from different campaigns."""
+    path = tmp_path / "journalbot.sqlite3"
+    campaigns = CampaignStore(path)
+    campaign_a = campaigns.create(123, "Campaign A", None)
+    sessions = SessionStore(path)
+    session_a = sessions.create(123, "Session A")
+    quests = QuestStore(path)
+    quests.create(123, "Quest A")
+    sessions.end_current(123)
+
+    campaign_b = campaigns.create(123, "Campaign B", None)
+    session_b = sessions.create(123, "Session B")
+    quest_b = quests.create(123, "Quest B")
+
+    factory = create_session_factory(path)
+    with factory.begin() as db:
+        context = db.get(ServerContextModel, "123")
+        assert context is not None
+        context.current_session_id = session_a.id
+
+    with pytest.raises(
+        ValueError,
+        match="selected session does not belong to the current campaign",
+    ):
+        quests.create_progress(123, str(quest_b.id), "Cross-campaign entry")
+
+    assert campaign_a.id != campaign_b.id
+    assert session_b.campaign_id == campaign_b.id
+
+
+def test_database_enforces_quest_progress_foreign_keys(tmp_path) -> None:
+    """QuestProgress cannot reference a missing Quest or Session."""
+    path = tmp_path / "journalbot.sqlite3"
+    CampaignStore(path).create(123, "Kingmaker", None)
+    session = SessionStore(path).create(123, "Opening")
+    quest = QuestStore(path).create(123, "Find the Merchant")
+    factory = create_session_factory(path)
+
+    with pytest.raises(IntegrityError):
+        with factory.begin() as db:
+            db.add(
+                QuestProgressModel(
+                    quest_id=999,
+                    session_id=session.id,
+                    description="Invalid quest reference",
+                    created_at="now",
+                )
+            )
+
+    with pytest.raises(IntegrityError):
+        with factory.begin() as db:
+            db.add(
+                QuestProgressModel(
+                    quest_id=quest.id,
+                    session_id=999,
+                    description="Invalid session reference",
+                    created_at="now",
+                )
+            )

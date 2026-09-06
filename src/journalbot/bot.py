@@ -444,7 +444,7 @@ class CampaignCommands(commands.Cog):
         except (CampaignError, SessionError) as error:
             await ctx.send(str(error))
             return
-        events = self.sessions.list_journal_events(guild_id)
+        events = self.sessions.list_journal_events_for_session(session.id)
         lines = [
             f"ID: {session.id}\nCampaign ID: {session.campaign_id}\n"
             f"Number: {session.number}\nTitle: {session.title}\n"

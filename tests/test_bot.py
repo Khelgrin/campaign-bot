@@ -490,6 +490,53 @@ def test_session_commands_cover_lifecycle_and_context(tmp_path) -> None:
     )
 
 
+def test_read_session_displays_events_for_requested_session(tmp_path) -> None:
+    """Reading an older session must not display events from the current session."""
+    cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
+    ctx = MagicMock()
+    ctx.guild = SimpleNamespace(id=123)
+    ctx.send = AsyncMock()
+
+    run(
+        cast(Any, cog.start_campaign.callback)(
+            cog, ctx, arguments='title="Kingmaker"'
+        )
+    )
+    run(
+        cast(Any, cog.start_session.callback)(
+            cog, ctx, arguments='title="Opening"'
+        )
+    )
+    first_session = cog.sessions.current(123)
+    run(
+        cast(Any, cog.add_journal_event.callback)(
+            cog, ctx, arguments='description="Opening event"'
+        )
+    )
+    run(cast(Any, cog.end_session.callback)(cog, ctx))
+    run(
+        cast(Any, cog.start_session.callback)(
+            cog, ctx, arguments='title="Investigation"'
+        )
+    )
+    run(
+        cast(Any, cog.add_journal_event.callback)(
+            cog, ctx, arguments='description="Investigation event"'
+        )
+    )
+
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.read_session.callback)(
+            cog, ctx, arguments=str(first_session.id)
+        )
+    )
+
+    response = ctx.send.await_args.args[0]
+    assert "Opening event" in response
+    assert "Investigation event" not in response
+
+
 def test_campaign_commands_reject_direct_messages(tmp_path) -> None:
     """
     Campaign lifecycle commands require a Discord guild context. This exercises the
