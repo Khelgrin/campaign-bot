@@ -16,6 +16,7 @@ from journalbot.database import (
     ServerContextModel,
     create_session_factory,
 )
+from journalbot.sessions import SessionStore
 
 
 def test_create_initializes_an_active_campaign(tmp_path) -> None:
@@ -103,14 +104,20 @@ def test_starting_a_campaign_replaces_only_the_guild_context(tmp_path) -> None:
     exercises the `starting a campaign replaces only the guild context` scenario and
     asserts the expected observable result or error.
     """
-    store = CampaignStore(tmp_path / "journalbot.sqlite3")
+    database_path = tmp_path / "journalbot.sqlite3"
+    store = CampaignStore(database_path)
     first = store.create(123, "First", None)
+    SessionStore(database_path).create(123, "Opening")
     second = store.create(123, "Second", None)
     other = store.create(456, "Other", None)
 
     assert store.current(123).id == second.id
     assert store.current(456).id == other.id
     assert store.find(str(first.id)).status == "ACTIVE"
+    with store.session_factory() as session:
+        context = session.get(ServerContextModel, "123")
+        assert context is not None
+        assert context.current_session_id is None
 
 
 def test_switching_campaign_is_rejected_with_an_active_session(tmp_path) -> None:
@@ -119,8 +126,6 @@ def test_switching_campaign_is_rejected_with_an_active_session(tmp_path) -> None
     `switching campaign is rejected with an active session` scenario and asserts the
     expected observable result or error.
     """
-    from journalbot.sessions import SessionStore
-
     database_path = tmp_path / "journalbot.sqlite3"
     store = CampaignStore(database_path)
     first = store.create(123, "First", None)
@@ -171,11 +176,17 @@ def test_select_persists_for_a_new_store_instance(tmp_path) -> None:
     store = CampaignStore(database_path)
     first = store.create(123, "First", None)
     second = store.create(123, "Second", None)
+    SessionStore(database_path).create(123, "Opening")
+    SessionStore(database_path).end_current(123)
 
     store.select(123, str(first.id))
 
     assert CampaignStore(database_path).current(123).id == first.id
     assert second.id != first.id
+    with store.session_factory() as session:
+        context = session.get(ServerContextModel, "123")
+        assert context is not None
+        assert context.current_session_id is None
 
 
 def test_missing_context_is_explicit(tmp_path) -> None:

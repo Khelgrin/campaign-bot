@@ -190,7 +190,7 @@ The command:
 Example:
 
 ```text
-/add-journal-event The party discovered an ancient shrine beneath the ruins.
+!add-journal-event description="The party discovered an ancient shrine beneath the ruins."
 ```
 
 Result:

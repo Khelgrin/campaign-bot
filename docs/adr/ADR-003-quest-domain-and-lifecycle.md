@@ -51,7 +51,7 @@ description         TEXT              NULL
 
 quest_giver         TEXT              NULL
 received_at_location TEXT             NULL
-started_session_id  UUID / integer    FK → Session
+started_session_id  UUID / integer    FK → Session, NOT NULL
 
 status              ENUM              NOT NULL
 
@@ -101,7 +101,7 @@ Example:
 Find the Missing Merchant
 ```
 
-It can be changed through `/update-quest`.
+It can be changed through `!update-quest`.
 
 Changing the title does not change the Quest ID.
 
@@ -163,6 +163,8 @@ A future Location domain can replace it if required.
 
 Session in which the Quest was created / received by the party.
 
+The field is required. Every Quest must have a `started_session_id`.
+
 Relationship:
 
 ```text
@@ -176,6 +178,7 @@ This field is required for the journal to answer:
 A Quest may span many later Sessions.
 
 `started_session_id` therefore does not represent the Quest's entire lifetime.
+The referenced Session must belong to the same Campaign as the Quest.
 
 #### `status`
 
@@ -238,7 +241,7 @@ Allowed transitions:
 
 Terminal states cannot be changed in MVP.
 
-There is no `/reopen-quest` command.
+There is no `!reopen-quest` command.
 
 If reopening becomes necessary later, it should be introduced as an explicit domain decision rather than implicitly allowed.
 
@@ -461,11 +464,13 @@ This preserves the original Quest definition and the complete history.
 
 ## 8. Quest objectives
 
-The Quest domain may contain a list of objectives.
+Quest objectives are a low-priority enhancement and are **not implemented**.
 
-For the MVP, objectives are optional but supported as a separate domain object rather than being encoded into the Quest description.
+They will not be implemented in the current MVP due to time constraints.
+Quest objectives are therefore deferred to a future, explicitly scoped
+enhancement rather than being part of the current Quest contract.
 
-Conceptually:
+If implemented in a future version, objectives could be modeled conceptually as:
 
 ```text
 Quest 1 ─────── N QuestObjective
@@ -483,9 +488,9 @@ Objectives:
 [ ] Return the merchant to Otari
 ```
 
-`QuestObjective` is not required for the basic Quest lifecycle and does not replace `QuestProgress`.
+This future concept does not replace `QuestProgress`.
 
-The distinction is:
+If introduced later, the distinction would be:
 
 ```text
 QuestObjective = what needs to be done
@@ -502,6 +507,8 @@ The implementation must enforce:
 Quest.campaign_id → existing Campaign
 
 Quest.started_session_id → existing Session
+
+Quest.started_session_id → Session.campaign_id = Quest.campaign_id
 
 Quest.status = ACTIVE
     → closed_at IS NULL
@@ -520,6 +527,8 @@ The MVP does not include:
 
 * Quest reopening
 * Quest deletion
+* Quest objectives; deferred as a low-priority enhancement and not implemented
+  in the MVP due to time constraints
 * Quest sharing between Campaigns
 * NPC domain integration
 * Location domain integration
@@ -535,7 +544,7 @@ The MVP does not include:
 This design makes the common journal queries simple:
 
 ```text
-/list-quests active
+!list-quests active
 ```
 
 can query the current Campaign for:
