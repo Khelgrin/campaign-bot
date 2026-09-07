@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from math import ceil
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, cast
@@ -143,51 +144,6 @@ class _JournalLayoutBuilder:
                 layout.add_item(discord.ui.TextDisplay(f"**{name}**\n{value}"))
         _add_button_rows(layout, trailing)
 
-    # def _add_quest_list_layout(
-    #         self, layout: discord.ui.Container, buttons: list[discord.ui.Button]
-    # ) -> None:
-    #     filters = [
-    #         button
-    #         for button in buttons
-    #         if button.custom_id and button.custom_id.startswith("j:q:list:")
-    #     ]
-    #
-    #     quest_buttons = [
-    #         button
-    #         for button in buttons
-    #         if button.custom_id and button.custom_id.startswith("j:q:view:")
-    #     ]
-    #
-    #     trailing = [
-    #         button for button in buttons
-    #         if button not in filters + quest_buttons
-    #     ]
-    #
-    #     # Filters
-    #     _add_button_row(layout, filters)
-    #     layout.add_item(discord.ui.Separator())
-    #
-    #     # Quests
-    #     quest_index = 0
-    #     for name, value, _ in self.fields:
-    #         if name.startswith("Page "):
-    #             layout.add_item(discord.ui.TextDisplay(f"*{name}*"))
-    #             continue
-    #
-    #         if quest_index < len(quest_buttons):
-    #             layout.add_item(
-    #                 discord.ui.Section(
-    #                     discord.ui.TextDisplay(f"**{name}**\n{value}"),
-    #                     accessory=quest_buttons[quest_index],
-    #                 )
-    #             )
-    #             quest_index += 1
-    #         else:
-    #             layout.add_item(discord.ui.TextDisplay(f"**{name}**\n{value}"))
-    #
-    #     # Navigation
-    #     _add_button_rows(layout, trailing)
-
     def _add_session_list_layout(
         self, layout: discord.ui.Container, buttons: list[discord.ui.Button]
     ) -> None:
@@ -199,6 +155,9 @@ class _JournalLayoutBuilder:
         trailing = [button for button in buttons if button not in session_buttons]
         layout.add_item(discord.ui.Separator())
         for index, (name, value, _) in enumerate(self.fields):
+            if name.startswith("Page "):
+                layout.add_item(discord.ui.TextDisplay(f"*{name}*"))
+                continue
             if index < len(session_buttons):
                 layout.add_item(
                     discord.ui.Section(
@@ -206,6 +165,7 @@ class _JournalLayoutBuilder:
                         accessory=session_buttons[index],
                     )
                 )
+                layout.add_item(discord.ui.Separator())
             else:
                 layout.add_item(discord.ui.TextDisplay(f"**{name}**\n{value}"))
         _add_button_rows(layout, trailing)
@@ -254,7 +214,7 @@ def _render_layout(
         builder._add_dashboard_layout(layout, buttons)
     else:
         panel: discord.ui.Container[Any] = discord.ui.Container(
-            accent_color=0x1E293B
+            accent_color=0x46D789
         )
         panel.add_item(discord.ui.TextDisplay(content))
         if kind == "quest_list":
@@ -320,7 +280,6 @@ class JournalRenderer:
             ("⚔️  " + str(counts["ACTIVE"]), "Active ", True),
             ("✅  " + str(counts["COMPLETED"]), "Completed", True),
             ("❌  " + str(counts["FAILED"]), "Failed", True),
-            # (SEPARATOR, "\u200b", False),
             ("🗓️  " + session_text, "", True),
         ]
         if recent_quests:
@@ -343,7 +302,6 @@ class JournalRenderer:
             fields.append(("Recent activity", "No quests recorded yet.", False))
 
         buttons: list[tuple[str, str]] = [
-            # ("All Quests", "j:q:list:all:0"),
             ("Active", "j:q:list:active:0"),
             ("Completed", "j:q:list:completed:0"),
             ("Failed", "j:q:list:failed:0"),
@@ -419,13 +377,9 @@ class JournalRenderer:
 
         buttons.extend(
             [
-                # ("‹  Prev", f"j:q:list:{filter_name}:{page - 1}"),
-                # ("Next  ›", f"j:q:list:{filter_name}:{page + 1}"),
                 ("Back", "j:home"),
             ]
         )
-
-
 
         fields.append((f"Page {page + 1} / {pages}", "\u200b", False))
         return _render_layout(
@@ -441,13 +395,13 @@ class JournalRenderer:
         session_title_to_display = session.title or quest.started_session_id
         progress = self.quests.list_progress(self.guild_id, str(quest_id))
         lines = [
-            f"## {quest.title}",
+            f"## {quest.title} {_quest_emoji(quest.status)}",
             f"{quest.description or 'No description.'}",
         ]
         detail_fields: list[tuple[str, str, bool]] = [
-            ("Status", _status_label(quest.status), True),
-            ("👤 Quest giver", quest.quest_giver or "(none)", True),
-            ("📍 Received at", quest.received_at_location or "(none)", True),
+            ("Status:", _status_label(quest.status), True),
+            ("👤 Quest giver:", quest.quest_giver or "Nieznany", True),
+            ("📍 Received at", quest.received_at_location or "Nieznany", True),
             ("🗓️ Started in", f"{session_title_to_display} (ID:{quest.started_session_id})", True),
             (SEPARATOR, "\u200b", False),
         ]
@@ -459,7 +413,7 @@ class JournalRenderer:
             for entry in progress:
                 entry_session_title = self.sessions.find(str(entry.session_id), campaign.id).title
                 progress_section_entries.append(
-                    f"🟢 **Session {entry.session_id}: {entry_session_title} ** \n"
+                    f"🗡️ **Session {entry.session_id}: {entry_session_title} ** \n"
                     f"{entry.description}")
 
             progress_section_entry = "\n".join(progress_section_entries)
@@ -497,11 +451,13 @@ class JournalRenderer:
         pages = max(1, ceil(len(items) / PAGE_SIZE))
         page = min(max(page, 0), pages - 1)
         selected = items[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
-        lines = ["## SESSIONS", "", "Sessions in this campaign."]
+        lines = ["## SESSIONS"]
+
         session_fields = [
             (
                 f"🗓️  Session #{item.number} — {item.title}",
-                f"{item.played_at}\n**Status:** {_status_label(item.status)}",
+                f"Played at: {datetime.fromisoformat(item.played_at).strftime('%Y-%m-%d')}\n"
+                f"**Status:** {_status_label(item.status)}",
                 False,
             )
             for item in selected
@@ -512,11 +468,19 @@ class JournalRenderer:
             (f"Session #{item.number} — {item.title}"[:80], f"j:s:view:{item.id}")
             for item in selected
         ]
+
+        if page > 0:
+            buttons.append(("‹  Prev", f"j:s:page:{page - 1}"))
+
+        if page < pages - 1:
+            buttons.append(("Next  ›", f"j:s:page:{page + 1}"))
+
         buttons.extend(
             [
                 ("Back", "j:home"),
             ]
         )
+
         session_fields.append((f"Page {page + 1} / {pages}", "\u200b", False))
         return _render_layout(
             "\n".join(lines),
@@ -531,28 +495,29 @@ class JournalRenderer:
         session = self.sessions.find(str(session_id), campaign.id)
         events = self.sessions.list_journal_events_for_session(session.id)
         progress = self.quests.list_for_session(session.id)
-        lines = [f"## SESSION #{session.number}", f"**{session.title}**"]
-        detail_fields: list[tuple[str, str, bool]] = [
-            ("🗓️ Date", session.played_at, False),
-            ("📜 Journal Events", "\u200b", False),
-        ]
+        played_at = datetime.fromisoformat(session.played_at).strftime('%Y-%m-%d')
+
+        lines = [f"## SESSION #{session.number} - Played at {played_at}", f"**{session.title}**"]
+        detail_fields: list[tuple[str, str, bool]] = []
         if events:
             detail_fields.append(
                 (
-                    f"Events ({len(events)})",
-                    "\n".join(f"📄 {event.description}" for event in events),
+                    f"### 📜 Journal Events ({len(events)})",
+                    "\n".join(f"📌 {event.description}" for event in events),
                     False,
                 )
             )
         else:
             detail_fields.append(("Events (0)", "(none)", False))
-        detail_fields.append(("📖 Quest Progress", "\u200b", False))
+        detail_fields.append(
+            (SEPARATOR, "\u200b", False)
+        )
         if progress:
             detail_fields.append(
                 (
-                    f"Progress ({len(progress)})",
+                    f"### 📖 Quest Progress ({len(progress)})",
                     "\n".join(
-                        f"**{entry.quest_title}** — {entry.description}"
+                        f"🗡️ **{entry.quest_title}** — {entry.description}"
                         for entry in progress
                     ),
                     False,
@@ -560,6 +525,9 @@ class JournalRenderer:
             )
         else:
             detail_fields.append(("Progress (0)", "(none)", False))
+        detail_fields.append(
+            (SEPARATOR, "\u200b", False)
+        )
         return _render_layout(
             "\n".join(lines),
             tuple(detail_fields),
@@ -603,6 +571,8 @@ class JournalRenderer:
                     self.quest_details(int(action[2]), action[3], int(action[4])),
                 )
             elif action[:2] == ["s", "list"]:
+                await _edit(interaction, self.session_list(int(action[2])))
+            elif action[:2] == ["s", "page"]:
                 await _edit(interaction, self.session_list(int(action[2])))
             elif action[:2] == ["s", "view"]:
                 await _edit(interaction, self.session_details(int(action[2]), 0))
@@ -834,9 +804,9 @@ def _quest_emoji(status: str) -> str:
 
 def _status_label(status: str) -> str:
     return {
-        "ACTIVE": "⚔️ Active",
-        "COMPLETED": "✅ Completed",
-        "FAILED": "❌ Failed",
+        "ACTIVE":     f"{_quest_emoji("ACTIVE")} Active",
+        "COMPLETED":  f"{_quest_emoji("COMPLETED")} Completed",
+        "FAILED":     f"{_quest_emoji("FAILED")} Completed",
     }.get(status, status.title())
 
 
