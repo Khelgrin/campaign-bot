@@ -132,12 +132,10 @@ def test_quest_lookup_is_campaign_scoped_and_ambiguous_titles_are_rejected(
     second = QuestStore(path).create(123, "Escort the Merchant")
 
     assert (
-        QuestStore(path).find(str(first.id), campaigns.find("Campaign A").id)
-        == first
+        QuestStore(path).find(str(first.id), campaigns.find("Campaign A").id) == first
     )
     assert (
-        QuestStore(path).find(str(second.id), campaigns.find("Campaign B").id)
-        == second
+        QuestStore(path).find(str(second.id), campaigns.find("Campaign B").id) == second
     )
 
     SessionStore(path).end_current(123)
@@ -236,8 +234,7 @@ def test_quest_progress_records_history_for_current_session_and_quest(
     assert progress.session_id > 0
     assert progress.description == "Found tracks leading to the abandoned mine."
     assert [
-        item.description
-        for item in QuestStore(path).list_progress(123, str(quest.id))
+        item.description for item in QuestStore(path).list_progress(123, str(quest.id))
     ] == [progress.description]
     assert [
         item.description

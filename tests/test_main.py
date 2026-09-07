@@ -20,7 +20,7 @@ def test_main_requires_a_discord_token(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_main_runs_created_bot_with_configured_token(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """
     Startup passes the configured token to the Discord client. This exercises the `main

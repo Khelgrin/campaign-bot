@@ -105,9 +105,7 @@ class SessionStore:
         timestamp = _now()
         with self.session_factory.begin() as session:
             context = session.get(ServerContextModel, str(guild_id))
-            campaign = (
-                context.current_campaign if context is not None else None
-            )
+            campaign = context.current_campaign if context is not None else None
             if campaign is None or context is None:
                 raise NoCampaignSelectedError(
                     "No campaign is currently selected. "
@@ -115,8 +113,7 @@ class SessionStore:
                 )
             if campaign.status == "ENDED":
                 raise SessionError(
-                    "The selected campaign has ended. "
-                    "Select an active campaign first."
+                    "The selected campaign has ended. Select an active campaign first."
                 )
             active = session.scalar(
                 select(SessionModel.id).where(
@@ -217,12 +214,16 @@ class SessionStore:
             value = identifier.strip()
             if value.lower().startswith("id:"):
                 raw_id = value[3:].strip()
-                model = session.scalar(
-                    select(SessionModel).where(
-                        SessionModel.id == int(raw_id),
-                        SessionModel.campaign_id == campaign_id,
+                model = (
+                    session.scalar(
+                        select(SessionModel).where(
+                            SessionModel.id == int(raw_id),
+                            SessionModel.campaign_id == campaign_id,
+                        )
                     )
-                ) if raw_id.isdigit() else None
+                    if raw_id.isdigit()
+                    else None
+                )
             elif value.isdigit():
                 model = session.scalar(
                     select(SessionModel).where(
@@ -245,9 +246,7 @@ class SessionStore:
                     )
                 )
             if model is None:
-                raise SessionNotFoundError(
-                    f"Session '{identifier}' was not found."
-                )
+                raise SessionNotFoundError(f"Session '{identifier}' was not found.")
             context.current_session = model
             context.updated_at = _now()
         return _session(model)
@@ -278,9 +277,7 @@ class SessionStore:
         with self.session_factory.begin() as session:
             model = session.get(SessionModel, found.id)
             if model is None:
-                raise SessionNotFoundError(
-                    f"Session '{identifier}' was not found."
-                )
+                raise SessionNotFoundError(f"Session '{identifier}' was not found.")
             if title is not None:
                 new_title = title.strip()
                 if not new_title:
@@ -309,9 +306,7 @@ class SessionStore:
         with self.session_factory.begin() as session:
             model = session.get(SessionModel, current.id)
             if model is None:
-                raise SessionNotFoundError(
-                    f"Session '{current.id}' was not found."
-                )
+                raise SessionNotFoundError(f"Session '{current.id}' was not found.")
             model.status = "ENDED"
             model.ended_at = _now()
         return self.current(guild_id)
@@ -327,9 +322,7 @@ class SessionStore:
             raise ValueError("Journal event description cannot be empty.")
         with self.session_factory.begin() as session:
             context = session.get(ServerContextModel, str(guild_id))
-            campaign_id = (
-                context.current_campaign_id if context is not None else None
-            )
+            campaign_id = context.current_campaign_id if context is not None else None
             if campaign_id is None:
                 raise NoCampaignSelectedError(
                     "No campaign is currently selected. "
@@ -372,9 +365,7 @@ class SessionStore:
     def _current_campaign_id(self, guild_id: int | str) -> int:
         with self.session_factory() as session:
             context = session.get(ServerContextModel, str(guild_id))
-            campaign_id = (
-                context.current_campaign_id if context is not None else None
-            )
+            campaign_id = context.current_campaign_id if context is not None else None
         if campaign_id is None:
             raise NoCampaignSelectedError(
                 "No campaign is currently selected. "

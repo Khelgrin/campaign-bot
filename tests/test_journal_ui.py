@@ -89,9 +89,9 @@ def test_renderer_builds_dashboard_and_all_navigation_views(tmp_path):
     assert "Kingmaker" in view_text(dashboard.view)
     assert "Opening" in view_text(dashboard.view)
     dashboard_ids = [item.custom_id for item in view_buttons(dashboard.view)]
-    assert 'j:q:list:active:0' in dashboard_ids
-    assert 'j:q:list:completed:0' in dashboard_ids
-    assert 'j:q:list:failed:0' in dashboard_ids
+    assert "j:q:list:active:0" in dashboard_ids
+    assert "j:q:list:completed:0" in dashboard_ids
+    assert "j:q:list:failed:0" in dashboard_ids
     assert "j:q:all:0" in dashboard_ids
     assert "j:s:list:0" in dashboard_ids
     assert "j:q:create" in dashboard_ids
@@ -161,9 +161,7 @@ def test_renderer_routes_navigation_and_progress_modal(tmp_path):
     )
     asyncio.run(progress_button.callback(interaction))
     interaction.response.send_modal.assert_awaited_once()
-    assert isinstance(
-        interaction.response.send_modal.await_args.args[0], ProgressModal
-    )
+    assert isinstance(interaction.response.send_modal.await_args.args[0], ProgressModal)
 
     interaction = MagicMock()
     interaction.response.send_modal = AsyncMock()
@@ -218,8 +216,9 @@ def test_progress_requires_current_session(tmp_path):
 
     asyncio.run(renderer._progress_modal(interaction, quest.id))
     interaction.response.send_message.assert_awaited_once()
-    assert "No session is currently selected" in (
-        interaction.response.send_message.await_args.args[0]
+    assert (
+        "No session is currently selected"
+        in (interaction.response.send_message.await_args.args[0])
     )
     assert session.id == 1
 

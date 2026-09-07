@@ -178,7 +178,11 @@ def test_session_update_preserves_id_and_number_and_corrects_metadata(tmp_path) 
     campaigns = CampaignStore(path)
     campaigns.create(123, "Kingmaker", None)
     sessions = SessionStore(path)
-    created = sessions.create(123, "Opening", "Initial",)
+    created = sessions.create(
+        123,
+        "Opening",
+        "Initial",
+    )
 
     updated = sessions.update(
         123, str(created.id), "Revised", "Updated", "2026-09-05T18:00:00+00:00"
@@ -459,12 +463,10 @@ def test_session_journal_events_are_stored_and_listed_per_session(tmp_path) -> N
 
     assert event.session_id == session.id
     assert (
-        event.description
-        == "The party discovered an ancient shrine beneath the ruins."
+        event.description == "The party discovered an ancient shrine beneath the ruins."
     )
     assert [
-        item.description
-        for item in SessionStore(path).list_journal_events(123)
+        item.description for item in SessionStore(path).list_journal_events(123)
     ] == [event.description]
 
     SessionStore(path).end_current(123)

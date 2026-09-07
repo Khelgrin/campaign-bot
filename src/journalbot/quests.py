@@ -121,9 +121,7 @@ class QuestProgressStore:
 
         with self.session_factory.begin() as session:
             context = session.get(ServerContextModel, str(guild_id))
-            campaign_id = (
-                context.current_campaign_id if context is not None else None
-            )
+            campaign_id = context.current_campaign_id if context is not None else None
             if campaign_id is None:
                 raise NoCampaignSelectedError(
                     "No campaign is currently selected. "
@@ -164,14 +162,10 @@ class QuestProgressStore:
                     "More than one quest has that title; use its ID."
                 )
             if not models:
-                raise QuestNotFoundError(
-                    f"Quest '{quest_identifier}' was not found."
-                )
+                raise QuestNotFoundError(f"Quest '{quest_identifier}' was not found.")
             quest_model = models[0]
             if quest_model.status != "ACTIVE":
-                raise ValueError(
-                    "Progress can only be added to an ACTIVE quest."
-                )
+                raise ValueError("Progress can only be added to an ACTIVE quest.")
 
             model = QuestProgressModel(
                 quest_id=quest_model.id,
@@ -221,9 +215,7 @@ class QuestProgressStore:
                     "More than one quest has that title; use its ID."
                 )
             if not models:
-                raise QuestNotFoundError(
-                    f"Quest '{quest_identifier}' was not found."
-                )
+                raise QuestNotFoundError(f"Quest '{quest_identifier}' was not found.")
             quest_model = models[0]
             progress_models = session.scalars(
                 select(QuestProgressModel)
@@ -288,9 +280,7 @@ class QuestStore:
         timestamp = _now()
         with self.session_factory.begin() as session:
             context = session.get(ServerContextModel, str(guild_id))
-            campaign_id = (
-                context.current_campaign_id if context is not None else None
-            )
+            campaign_id = context.current_campaign_id if context is not None else None
             if campaign_id is None:
                 raise NoCampaignSelectedError(
                     "No campaign is currently selected. "
@@ -386,9 +376,7 @@ class QuestStore:
                     ).all()
                 )
         if len(models) > 1:
-            raise AmbiguousQuestError(
-                "More than one quest has that title; use its ID."
-            )
+            raise AmbiguousQuestError("More than one quest has that title; use its ID.")
         if not models:
             raise QuestNotFoundError(f"Quest '{identifier}' was not found.")
         return _quest(models[0])
@@ -504,9 +492,7 @@ class QuestStore:
     def _current_campaign_id(self, guild_id: int | str) -> int:
         with self.session_factory() as session:
             context = session.get(ServerContextModel, str(guild_id))
-            campaign_id = (
-                context.current_campaign_id if context is not None else None
-            )
+            campaign_id = context.current_campaign_id if context is not None else None
         if campaign_id is None:
             raise NoCampaignSelectedError(
                 "No campaign is currently selected. "

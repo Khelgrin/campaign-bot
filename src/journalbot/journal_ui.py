@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime as dt
 from math import ceil
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, cast
@@ -191,6 +191,7 @@ class _JournalLayoutBuilder:
                 continue
             layout.add_item(discord.ui.TextDisplay(f"**{name}**\n{value}"))
 
+
 @dataclass(frozen=True)
 class JournalRender:
     """A completed Components V2 journal message."""
@@ -213,9 +214,7 @@ def _render_layout(
     if kind == "dashboard":
         builder._add_dashboard_layout(layout, buttons)
     else:
-        panel: discord.ui.Container[Any] = discord.ui.Container(
-            accent_color=0x46D789
-        )
+        panel: discord.ui.Container[Any] = discord.ui.Container(accent_color=0x46D789)
         panel.add_item(discord.ui.TextDisplay(content))
         if kind == "quest_list":
             builder._add_quest_list_layout(panel, buttons)
@@ -345,8 +344,7 @@ class JournalRenderer:
         ]
         fields = [
             (
-                f"### {item.title} — "
-                f"{_status_label(item.status)}",
+                f"### {item.title} — {_status_label(item.status)}",
                 (
                     f"{item.description or 'No description.'}\n"
                     f"**Giver:** {item.quest_giver or 'Unknown'}  ·  "
@@ -364,10 +362,7 @@ class JournalRenderer:
             ("Completed", f"j:q:list:completed:{page}"),
             ("Failed", f"j:q:list:failed:{page}"),
         ]
-        buttons.extend(
-            (item.title[:80], f"j:q:view:{item.id}")
-            for item in selected
-        )
+        buttons.extend((item.title[:80], f"j:q:view:{item.id}") for item in selected)
 
         if page > 0:
             buttons.append(("‹  Prev", f"j:q:page:{filter_name}:{page - 1}"))
@@ -402,19 +397,25 @@ class JournalRenderer:
             ("Status:", _status_label(quest.status), True),
             ("👤 Quest giver:", quest.quest_giver or "Nieznany", True),
             ("📍 Received at", quest.received_at_location or "Nieznany", True),
-            ("🗓️ Started in", f"{session_title_to_display} (ID:{quest.started_session_id})", True),
+            (
+                "🗓️ Started in",
+                f"{session_title_to_display} (ID:{quest.started_session_id})",
+                True,
+            ),
             (SEPARATOR, "\u200b", False),
         ]
         if progress:
-
-            progress_section_start =  f"📖 Progress ({len(progress)} entries):"
+            progress_section_start = f"📖 Progress ({len(progress)} entries):"
             progress_section_entries = []
 
             for entry in progress:
-                entry_session_title = self.sessions.find(str(entry.session_id), campaign.id).title
+                entry_session_title = self.sessions.find(
+                    str(entry.session_id), campaign.id
+                ).title
                 progress_section_entries.append(
                     f"🗡️ **Session {entry.session_id}: {entry_session_title} ** \n"
-                    f"{entry.description}")
+                    f"{entry.description}"
+                )
 
             progress_section_entry = "\n".join(progress_section_entries)
 
@@ -427,9 +428,7 @@ class JournalRenderer:
             )
         else:
             detail_fields.append(("📖 Progress (0 entries)", "(none)", False))
-        buttons: list[tuple[str, str]] = [
-            ("Back", f"j:q:back:{filter_name}:{page}")
-        ]
+        buttons: list[tuple[str, str]] = [("Back", f"j:q:back:{filter_name}:{page}")]
         if quest.status == "ACTIVE":
             buttons.extend(
                 [
@@ -456,7 +455,7 @@ class JournalRenderer:
         session_fields = [
             (
                 f"🗓️  Session #{item.number} — {item.title}",
-                f"Played at: {datetime.fromisoformat(item.played_at).strftime('%Y-%m-%d')}\n"
+                f"Played at: {dt.fromisoformat(item.played_at).strftime('%Y-%m-%d')}\n"
                 f"**Status:** {_status_label(item.status)}",
                 False,
             )
@@ -495,9 +494,12 @@ class JournalRenderer:
         session = self.sessions.find(str(session_id), campaign.id)
         events = self.sessions.list_journal_events_for_session(session.id)
         progress = self.quests.list_for_session(session.id)
-        played_at = datetime.fromisoformat(session.played_at).strftime('%Y-%m-%d')
+        played_at = dt.fromisoformat(session.played_at).strftime("%Y-%m-%d")
 
-        lines = [f"## SESSION #{session.number} - Played at {played_at}", f"**{session.title}**"]
+        lines = [
+            f"## SESSION #{session.number} - Played at {played_at}",
+            f"**{session.title}**",
+        ]
         detail_fields: list[tuple[str, str, bool]] = []
         if events:
             detail_fields.append(
@@ -509,9 +511,7 @@ class JournalRenderer:
             )
         else:
             detail_fields.append(("Events (0)", "(none)", False))
-        detail_fields.append(
-            (SEPARATOR, "\u200b", False)
-        )
+        detail_fields.append((SEPARATOR, "\u200b", False))
         if progress:
             detail_fields.append(
                 (
@@ -525,9 +525,7 @@ class JournalRenderer:
             )
         else:
             detail_fields.append(("Progress (0)", "(none)", False))
-        detail_fields.append(
-            (SEPARATOR, "\u200b", False)
-        )
+        detail_fields.append((SEPARATOR, "\u200b", False))
         return _render_layout(
             "\n".join(lines),
             tuple(detail_fields),
@@ -545,7 +543,7 @@ class JournalRenderer:
             elif action[:2] == ["q", "list"]:
                 await _edit(interaction, self.quest_list(action[2], int(action[3])))
             elif action[:2] == ["q", "page"]:
-                await _edit(interaction,self.quest_list(action[2], int(action[3])))
+                await _edit(interaction, self.quest_list(action[2], int(action[3])))
             elif action[:2] == ["q", "all"]:
                 await _edit(interaction, self.quest_list("all", int(action[2])))
             elif action[:2] == ["q", "view"]:
@@ -588,8 +586,7 @@ class JournalRenderer:
     ) -> JournalRender:
         verb = "Complete" if action == "complete" else "Fail"
         content = (
-            f"## {verb} Quest?\n\n"
-            f"Confirm changing this quest to **{verb.upper()}**."
+            f"## {verb} Quest?\n\nConfirm changing this quest to **{verb.upper()}**."
         )
         buttons = [
             (
@@ -804,9 +801,9 @@ def _quest_emoji(status: str) -> str:
 
 def _status_label(status: str) -> str:
     return {
-        "ACTIVE":     f"{_quest_emoji("ACTIVE")} Active",
-        "COMPLETED":  f"{_quest_emoji("COMPLETED")} Completed",
-        "FAILED":     f"{_quest_emoji("FAILED")} Completed",
+        "ACTIVE": f"{_quest_emoji('ACTIVE')} Active",
+        "COMPLETED": f"{_quest_emoji('COMPLETED')} Completed",
+        "FAILED": f"{_quest_emoji('FAILED')} Completed",
     }.get(status, status.title())
 
 

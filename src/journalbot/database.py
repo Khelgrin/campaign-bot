@@ -47,9 +47,7 @@ class CampaignModel(Base):
     contexts: Mapped[list["ServerContextModel"]] = relationship(
         back_populates="current_campaign"
     )
-    sessions: Mapped[list["SessionModel"]] = relationship(
-        back_populates="campaign"
-    )
+    sessions: Mapped[list["SessionModel"]] = relationship(back_populates="campaign")
     quests: Mapped[list["QuestModel"]] = relationship(back_populates="campaign")
 
 
@@ -75,9 +73,7 @@ class SessionModel(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    campaign_id: Mapped[int] = mapped_column(
-        ForeignKey("campaigns.id"), nullable=False
-    )
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), nullable=False)
     number: Mapped[int] = mapped_column(nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -97,6 +93,7 @@ class SessionModel(Base):
         back_populates="session"
     )
 
+
 class QuestModel(Base):
     """Persistent quest record."""
 
@@ -110,9 +107,7 @@ class QuestModel(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    campaign_id: Mapped[int] = mapped_column(
-        ForeignKey("campaigns.id"), nullable=False
-    )
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     quest_giver: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -196,9 +191,8 @@ def create_session_factory(database_path: str | Path) -> sessionmaker[Session]:
     Base.metadata.create_all(engine)
     with engine.begin() as connection:
         columns = {
-            row[1] for row in connection.exec_driver_sql(
-                "PRAGMA table_info(server_contexts)"
-            )
+            row[1]
+            for row in connection.exec_driver_sql("PRAGMA table_info(server_contexts)")
         }
         if "current_session_id" not in columns:
             connection.exec_driver_sql(
