@@ -18,46 +18,13 @@ SEPARATOR = "━━━━━━━━━━━━━━━━━━━━━━�
 
 
 @dataclass(frozen=True)
-class JournalRender:
-    """Complete message state for one journal view."""
+class _JournalLayoutBuilder:
+    """Direct Components V2 layout helpers for one journal screen."""
 
     content: str
-    view: discord.ui.View | discord.ui.LayoutView
+    view: discord.ui.LayoutView
     fields: tuple[tuple[str, str, bool], ...] = ()
     kind: str = "generic"
-
-    def __post_init__(self) -> None:
-        """Convert the classic button view into a Components V2 layout."""
-        if isinstance(self.view, discord.ui.LayoutView):
-            return
-        legacy_view = self.view
-        layout = discord.ui.LayoutView(timeout=legacy_view.timeout)
-        buttons = [
-            item
-            for item in legacy_view.children
-            if isinstance(item, discord.ui.Button)
-        ]
-        if self.kind == "dashboard":
-            self._add_dashboard_layout(layout, buttons)
-        else:
-            panel: discord.ui.Container[Any] = discord.ui.Container(
-                accent_color=0x1E293B
-            )
-            panel.add_item(discord.ui.TextDisplay(self.content))
-            if self.kind == "quest_list":
-                self._add_quest_list_layout(panel, buttons)
-            elif self.kind == "session_list":
-                self._add_session_list_layout(panel, buttons)
-            elif self.kind == "quest_details":
-                self._add_quest_details_layout(panel, buttons)
-            elif self.kind == "session_details":
-                self._add_session_details_layout(panel, buttons)
-            else:
-                panel.add_item(discord.ui.Separator())
-                self._add_fields(panel)
-                _add_button_rows(panel, buttons)
-            layout.add_item(panel)
-        object.__setattr__(self, "view", layout)
 
     def _add_dashboard_layout(
         self, layout: discord.ui.LayoutView, buttons: list[discord.ui.Button]
@@ -154,6 +121,7 @@ class JournalRender:
         trailing = [
             button for button in buttons if button not in filters + quest_buttons
         ]
+
         layout.add_item(discord.ui.Separator())
         _add_button_row(layout, filters)
         layout.add_item(discord.ui.Separator())
@@ -170,9 +138,55 @@ class JournalRender:
                     )
                 )
                 quest_index += 1
+                layout.add_item(discord.ui.Separator())
             else:
                 layout.add_item(discord.ui.TextDisplay(f"**{name}**\n{value}"))
         _add_button_rows(layout, trailing)
+
+    # def _add_quest_list_layout(
+    #         self, layout: discord.ui.Container, buttons: list[discord.ui.Button]
+    # ) -> None:
+    #     filters = [
+    #         button
+    #         for button in buttons
+    #         if button.custom_id and button.custom_id.startswith("j:q:list:")
+    #     ]
+    #
+    #     quest_buttons = [
+    #         button
+    #         for button in buttons
+    #         if button.custom_id and button.custom_id.startswith("j:q:view:")
+    #     ]
+    #
+    #     trailing = [
+    #         button for button in buttons
+    #         if button not in filters + quest_buttons
+    #     ]
+    #
+    #     # Filters
+    #     _add_button_row(layout, filters)
+    #     layout.add_item(discord.ui.Separator())
+    #
+    #     # Quests
+    #     quest_index = 0
+    #     for name, value, _ in self.fields:
+    #         if name.startswith("Page "):
+    #             layout.add_item(discord.ui.TextDisplay(f"*{name}*"))
+    #             continue
+    #
+    #         if quest_index < len(quest_buttons):
+    #             layout.add_item(
+    #                 discord.ui.Section(
+    #                     discord.ui.TextDisplay(f"**{name}**\n{value}"),
+    #                     accessory=quest_buttons[quest_index],
+    #                 )
+    #             )
+    #             quest_index += 1
+    #         else:
+    #             layout.add_item(discord.ui.TextDisplay(f"**{name}**\n{value}"))
+    #
+    #     # Navigation
+    #     _add_button_rows(layout, trailing)
 
     def _add_session_list_layout(
         self, layout: discord.ui.Container, buttons: list[discord.ui.Button]
@@ -211,18 +225,53 @@ class JournalRender:
         _add_button_rows(layout, buttons)
 
     def _add_fields(self, layout: discord.ui.Container) -> None:
-        inline_fields: list[tuple[str, str]] = []
-        for name, value, inline in self.fields:
+        for name, value, _ in self.fields:
             if name == SEPARATOR:
-                _flush_inline_fields(layout, inline_fields)
                 layout.add_item(discord.ui.Separator())
                 continue
-            if inline:
-                inline_fields.append((name, value))
-                continue
-            _flush_inline_fields(layout, inline_fields)
             layout.add_item(discord.ui.TextDisplay(f"**{name}**\n{value}"))
-        _flush_inline_fields(layout, inline_fields)
+
+@dataclass(frozen=True)
+class JournalRender:
+    """A completed Components V2 journal message."""
+
+    view: discord.ui.LayoutView
+
+
+def _render_layout(
+    content: str,
+    fields: tuple[tuple[str, str, bool], ...],
+    kind: str,
+    button_specs: tuple[tuple[str, str], ...] | list[tuple[str, str]],
+    callback: Callable[[discord.Interaction, str], Awaitable[None]],
+) -> JournalRender:
+    """Build one journal screen directly with Components V2 objects."""
+    layout = discord.ui.LayoutView(timeout=900)
+    buttons = _buttons(button_specs, callback)
+    builder = _JournalLayoutBuilder(content, layout, fields, kind)
+
+    if kind == "dashboard":
+        builder._add_dashboard_layout(layout, buttons)
+    else:
+        panel: discord.ui.Container[Any] = discord.ui.Container(
+            accent_color=0x1E293B
+        )
+        panel.add_item(discord.ui.TextDisplay(content))
+        if kind == "quest_list":
+            builder._add_quest_list_layout(panel, buttons)
+        elif kind == "session_list":
+            builder._add_session_list_layout(panel, buttons)
+        elif kind == "quest_details":
+            builder._add_quest_details_layout(panel, buttons)
+        elif kind == "session_details":
+            builder._add_session_details_layout(panel, buttons)
+        else:
+            panel.add_item(discord.ui.Separator())
+            builder._add_fields(panel)
+            _add_button_rows(panel, buttons)
+        layout.add_item(panel)
+    return JournalRender(layout)
+
 
 class JournalRenderer:
     """Loads journal data and renders each interactive view."""
@@ -268,9 +317,10 @@ class JournalRenderer:
             ),
             (SEPARATOR, "\u200b", False),
             ("Quests", "\u200b", False),
-            ("⚔️  " + str(counts["ACTIVE"]), "Active", True),
+            ("⚔️  " + str(counts["ACTIVE"]), "Active ", True),
             ("✅  " + str(counts["COMPLETED"]), "Completed", True),
             ("❌  " + str(counts["FAILED"]), "Failed", True),
+            # (SEPARATOR, "\u200b", False),
             ("🗓️  " + session_text, "", True),
         ]
         if recent_quests:
@@ -284,7 +334,7 @@ class JournalRenderer:
                 )
                 fields.append(
                     (
-                        f"{_quest_emoji(quest.status)}  {quest.title}",
+                        f"{quest.title}",
                         f"{_status_label(quest.status)}  ·  {last_progress}",
                         False,
                     )
@@ -293,7 +343,7 @@ class JournalRenderer:
             fields.append(("Recent activity", "No quests recorded yet.", False))
 
         buttons: list[tuple[str, str]] = [
-            ("All Quests", "j:q:list:all:0"),
+            # ("All Quests", "j:q:list:all:0"),
             ("Active", "j:q:list:active:0"),
             ("Completed", "j:q:list:completed:0"),
             ("Failed", "j:q:list:failed:0"),
@@ -305,13 +355,15 @@ class JournalRenderer:
             [
                 ("View all quests", "j:q:all:0"),
                 ("Sessions", "j:s:list:0"),
+                ("Create Quest", "j:q:create"),
             ]
         )
-        return JournalRender(
+        return _render_layout(
             "\n".join(lines),
-            _view(buttons, self._route),
             tuple(fields),
             "dashboard",
+            buttons,
+            self._route,
         )
 
     def quest_list(self, filter_name: str, page: int) -> JournalRender:
@@ -335,7 +387,7 @@ class JournalRenderer:
         ]
         fields = [
             (
-                f"{_quest_emoji(item.status)}  {item.title} — "
+                f"### {item.title} — "
                 f"{_status_label(item.status)}",
                 (
                     f"{item.description or 'No description.'}\n"
@@ -358,15 +410,26 @@ class JournalRenderer:
             (item.title[:80], f"j:q:view:{item.id}")
             for item in selected
         )
+
+        if page > 0:
+            buttons.append(("‹  Prev", f"j:q:page:{filter_name}:{page - 1}"))
+
+        if page < pages - 1:
+            buttons.append(("Next  ›", f"j:q:page:{filter_name}:{page + 1}"))
+
         buttons.extend(
             [
+                # ("‹  Prev", f"j:q:list:{filter_name}:{page - 1}"),
+                # ("Next  ›", f"j:q:list:{filter_name}:{page + 1}"),
                 ("Back", "j:home"),
             ]
         )
-        view = _view(buttons, self._route)
+
+
+
         fields.append((f"Page {page + 1} / {pages}", "\u200b", False))
-        return JournalRender(
-            "\n".join(lines), view, tuple(fields), "quest_list"
+        return _render_layout(
+            "\n".join(lines), tuple(fields), "quest_list", buttons, self._route
         )
 
     def quest_details(
@@ -374,23 +437,37 @@ class JournalRenderer:
     ) -> JournalRender:
         campaign = self.campaigns.current(self.guild_id)
         quest = self.quests.find(str(quest_id), campaign.id)
+        session = self.sessions.find(str(quest.started_session_id), campaign.id)
+        session_title_to_display = session.title or quest.started_session_id
         progress = self.quests.list_progress(self.guild_id, str(quest_id))
-        lines = [f"## {quest.title}"]
+        lines = [
+            f"## {quest.title}",
+            f"{quest.description or 'No description.'}",
+        ]
         detail_fields: list[tuple[str, str, bool]] = [
-            ("Status", _status_label(quest.status), False),
+            ("Status", _status_label(quest.status), True),
             ("👤 Quest giver", quest.quest_giver or "(none)", True),
             ("📍 Received at", quest.received_at_location or "(none)", True),
-            ("🗓️ Started in", f"Session {quest.started_session_id}", True),
-            ("Description", quest.description or "(none)", False),
+            ("🗓️ Started in", f"{session_title_to_display} (ID:{quest.started_session_id})", True),
+            (SEPARATOR, "\u200b", False),
         ]
         if progress:
+
+            progress_section_start =  f"📖 Progress ({len(progress)} entries):"
+            progress_section_entries = []
+
+            for entry in progress:
+                entry_session_title = self.sessions.find(str(entry.session_id), campaign.id).title
+                progress_section_entries.append(
+                    f"🟢 **Session {entry.session_id}: {entry_session_title} ** \n"
+                    f"{entry.description}")
+
+            progress_section_entry = "\n".join(progress_section_entries)
+
             detail_fields.append(
                 (
-                    f"📖 Progress ({len(progress)} entries)",
-                    "\n".join(
-                        f"🟢 **Session {entry.session_id}**  {entry.description}"
-                        for entry in progress
-                    ),
+                    progress_section_start,
+                    progress_section_entry,
                     False,
                 )
             )
@@ -407,11 +484,12 @@ class JournalRenderer:
                     ("Fail", f"j:q:fail:{quest.id}:{filter_name}:{page}"),
                 ]
             )
-        return JournalRender(
+        return _render_layout(
             "\n".join(lines),
-            _view(buttons, self._route),
             tuple(detail_fields),
             "quest_details",
+            buttons,
+            self._route,
         )
 
     def session_list(self, page: int) -> JournalRender:
@@ -439,10 +517,13 @@ class JournalRenderer:
                 ("Back", "j:home"),
             ]
         )
-        view = _view(buttons, self._route)
         session_fields.append((f"Page {page + 1} / {pages}", "\u200b", False))
-        return JournalRender(
-            "\n".join(lines), view, tuple(session_fields), "session_list"
+        return _render_layout(
+            "\n".join(lines),
+            tuple(session_fields),
+            "session_list",
+            buttons,
+            self._route,
         )
 
     def session_details(self, session_id: int, page: int) -> JournalRender:
@@ -479,11 +560,12 @@ class JournalRenderer:
             )
         else:
             detail_fields.append(("Progress (0)", "(none)", False))
-        return JournalRender(
+        return _render_layout(
             "\n".join(lines),
-            _view((("Back", f"j:s:back:{page}"),), self._route),
             tuple(detail_fields),
             "session_details",
+            (("Back", f"j:s:back:{page}"),),
+            self._route,
         )
 
     async def _route(self, interaction: discord.Interaction, custom_id: str) -> None:
@@ -494,6 +576,8 @@ class JournalRenderer:
                 await _edit(interaction, self.dashboard())
             elif action[:2] == ["q", "list"]:
                 await _edit(interaction, self.quest_list(action[2], int(action[3])))
+            elif action[:2] == ["q", "page"]:
+                await _edit(interaction,self.quest_list(action[2], int(action[3])))
             elif action[:2] == ["q", "all"]:
                 await _edit(interaction, self.quest_list("all", int(action[2])))
             elif action[:2] == ["q", "view"]:
@@ -502,6 +586,8 @@ class JournalRenderer:
                 await _edit(interaction, self.quest_list(action[2], int(action[3])))
             elif action[:2] == ["q", "progress"]:
                 await self._progress_modal(interaction, int(action[2]))
+            elif action[:2] == ["q", "create"]:
+                await interaction.response.send_modal(CreateQuestModal(self))
             elif action[:2] in (["q", "complete"], ["q", "fail"]):
                 await _edit(
                     interaction,
@@ -542,7 +628,7 @@ class JournalRenderer:
             ),
             ("Cancel", f"j:q:cancel:{quest_id}:{filter_name}:{page}"),
         ]
-        return JournalRender(content, _view(buttons, self._route))
+        return _render_layout(content, (), "confirmation", buttons, self._route)
 
     async def _confirm(
         self, interaction: discord.Interaction, action: list[str]
@@ -577,6 +663,24 @@ class JournalRenderer:
         self.quests.add_progress(self.guild_id, str(quest_id), description)
         await _edit(interaction, self.quest_details(quest_id, "all", 0))
 
+    async def create_quest(
+        self,
+        interaction: discord.Interaction,
+        title: str,
+        description: str,
+        quest_giver: str | None,
+        received_at_location: str | None,
+    ) -> None:
+        """Create a quest from the dashboard modal and refresh the dashboard."""
+        self.quests.create(
+            self.guild_id,
+            title,
+            description,
+            quest_giver,
+            received_at_location,
+        )
+        await _edit(interaction, self.dashboard())
+
 
 class ProgressModal(discord.ui.Modal, title="Add Quest Progress"):
     """Modal for creating one immutable quest progress entry."""
@@ -603,6 +707,48 @@ class ProgressModal(discord.ui.Modal, title="Add Quest Progress"):
             await _error(interaction, str(error))
 
 
+class CreateQuestModal(discord.ui.Modal, title="Create Quest"):
+    """Modal equivalent of the !create-quest command."""
+
+    quest_title: discord.ui.TextInput = discord.ui.TextInput(
+        label="Title",
+        custom_id="title",
+        required=True,
+    )
+    description: discord.ui.TextInput = discord.ui.TextInput(
+        label="Description",
+        custom_id="description",
+        style=discord.TextStyle.paragraph,
+        required=True,
+    )
+    quest_giver: discord.ui.TextInput = discord.ui.TextInput(
+        label="Quest giver",
+        custom_id="quest_giver",
+        required=False,
+    )
+    received_at_location: discord.ui.TextInput = discord.ui.TextInput(
+        label="Received at location",
+        custom_id="received_at_location",
+        required=False,
+    )
+
+    def __init__(self, renderer: JournalRenderer) -> None:
+        super().__init__(custom_id="j:m:create-quest")
+        self.renderer = renderer
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        try:
+            await self.renderer.create_quest(
+                interaction,
+                str(self.quest_title.value),
+                str(self.description.value),
+                str(self.quest_giver.value) or None,
+                str(self.received_at_location.value) or None,
+            )
+        except (CampaignError, QuestError, SessionError, ValueError) as error:
+            await _error(interaction, str(error))
+
+
 def _has_current_session(sessions: SessionStore, guild_id: int) -> bool:
     try:
         sessions.current(guild_id)
@@ -611,13 +757,13 @@ def _has_current_session(sessions: SessionStore, guild_id: int) -> bool:
     return True
 
 
-def _view(
+def _buttons(
     buttons: tuple[tuple[str, str], ...] | list[tuple[str, str]],
     callback: Callable[[discord.Interaction, str], Awaitable[None]],
-) -> discord.ui.View:
-    view = discord.ui.View(timeout=900)
+) -> list[discord.ui.Button]:
+    components: list[discord.ui.Button] = []
     for label, custom_id in buttons:
-        button: discord.ui.Button[discord.ui.View] = discord.ui.Button(
+        button: discord.ui.Button[Any] = discord.ui.Button(
             label=label,
             custom_id=custom_id,
             style=_button_style(custom_id),
@@ -626,13 +772,13 @@ def _view(
 
         async def clicked(
             interaction: discord.Interaction,
-            button: discord.ui.Button[discord.ui.View] = button,
+            button: discord.ui.Button[Any] = button,
         ) -> None:
             await callback(interaction, button.custom_id or "")
 
         cast(Any, button).callback = clicked
-        view.add_item(button)
-    return view
+        components.append(button)
+    return components
 
 
 async def _edit(interaction: discord.Interaction, rendered: JournalRender) -> None:
@@ -647,19 +793,6 @@ async def _error(interaction: discord.Interaction, message: str) -> None:
         await interaction.followup.send(message, ephemeral=True)
     else:
         await interaction.response.send_message(message, ephemeral=True)
-
-
-def _flush_inline_fields(
-    layout: discord.ui.Container, fields: list[tuple[str, str]]
-) -> None:
-    if not fields:
-        return
-    layout.add_item(
-        discord.ui.TextDisplay(
-            "  |  ".join(f"**{name}**\n{value}" for name, value in fields)
-        )
-    )
-    fields.clear()
 
 
 def _add_button_row(
@@ -683,10 +816,10 @@ def _button_style(custom_id: str) -> discord.ButtonStyle:
     if ":list:all:" in custom_id or custom_id in {"j:q:all:0", "j:s:list:0"}:
         return discord.ButtonStyle.primary
     if ":list:active:" in custom_id:
-        return discord.ButtonStyle.success
-    if ":progress:" in custom_id:
+        return discord.ButtonStyle.secondary
+    if ":progress:" in custom_id or custom_id == "j:q:create":
         return discord.ButtonStyle.primary
-    if ":fail" in custom_id or ":confirm-fail:" in custom_id:
+    if ":confirm-fail:" in custom_id:
         return discord.ButtonStyle.danger
     return discord.ButtonStyle.secondary
 
@@ -719,7 +852,7 @@ def _button_emoji(custom_id: str, label: str) -> str | None:
         return "✅"
     if ":list:failed:" in custom_id:
         return "❌"
-    if ":progress:" in custom_id:
+    if ":progress:" in custom_id or custom_id == "j:q:create":
         return "➕"
     if ":complete" in custom_id or ":confirm-complete:" in custom_id:
         return "✅"

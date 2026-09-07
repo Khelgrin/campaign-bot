@@ -9,7 +9,12 @@ import discord
 from journalbot.bot import CampaignCommands
 from journalbot.campaigns import CampaignStore
 from journalbot.database import ServerContextModel
-from journalbot.journal_ui import JournalRender, JournalRenderer, ProgressModal
+from journalbot.journal_ui import (
+    CreateQuestModal,
+    JournalRender,
+    JournalRenderer,
+    ProgressModal,
+)
 from journalbot.quests import QuestStore
 from journalbot.sessions import SessionStore
 
@@ -84,9 +89,12 @@ def test_renderer_builds_dashboard_and_all_navigation_views(tmp_path):
     assert "Kingmaker" in view_text(dashboard.view)
     assert "Opening" in view_text(dashboard.view)
     dashboard_ids = [item.custom_id for item in view_buttons(dashboard.view)]
-    assert "j:q:list:all:0" in dashboard_ids
+    assert 'j:q:list:active:0' in dashboard_ids
+    assert 'j:q:list:completed:0' in dashboard_ids
+    assert 'j:q:list:failed:0' in dashboard_ids
     assert "j:q:all:0" in dashboard_ids
     assert "j:s:list:0" in dashboard_ids
+    assert "j:q:create" in dashboard_ids
 
     quest_list = renderer.quest_list("all", 0)
     assert isinstance(quest_list.view.children[0], discord.ui.Container)
@@ -133,7 +141,7 @@ def test_renderer_quest_details_and_confirmation_actions(tmp_path):
 
 
 def test_renderer_routes_navigation_and_progress_modal(tmp_path):
-    renderer, _, _, _, quest = setup_journal(tmp_path)
+    renderer, _, quests, _, quest = setup_journal(tmp_path)
     import asyncio
 
     interaction = MagicMock()
@@ -156,6 +164,36 @@ def test_renderer_routes_navigation_and_progress_modal(tmp_path):
     assert isinstance(
         interaction.response.send_modal.await_args.args[0], ProgressModal
     )
+
+    interaction = MagicMock()
+    interaction.response.send_modal = AsyncMock()
+    create_button = next(
+        item
+        for item in view_buttons(renderer.dashboard().view)
+        if item.custom_id == "j:q:create"
+    )
+    asyncio.run(create_button.callback(interaction))
+    create_modal = interaction.response.send_modal.await_args.args[0]
+    assert isinstance(create_modal, CreateQuestModal)
+    assert create_modal.quest_title.required is True
+    assert create_modal.description.required is True
+    assert create_modal.quest_giver.required is False
+    assert create_modal.received_at_location.required is False
+
+    interaction = MagicMock()
+    interaction.response.is_done.return_value = False
+    interaction.response.edit_message = AsyncMock()
+    asyncio.run(
+        renderer.create_quest(
+            interaction,
+            "Meet the Dryad",
+            "Ask about the grove.",
+            "Elowen",
+            "The Old Forest",
+        )
+    )
+    assert quests.find("Meet the Dryad", 1).quest_giver == "Elowen"
+    interaction.response.edit_message.assert_awaited_once()
 
 
 def test_progress_requires_current_session(tmp_path):
@@ -219,7 +257,7 @@ def test_components_v2_rendering_and_empty_dashboard(tmp_path):
     import asyncio
 
     layout = discord.ui.LayoutView()
-    rendered = JournalRender("## ACTIVE\n**Status:** ACTIVE", layout)
+    rendered = JournalRender(layout)
     assert rendered.view is layout
 
     database = tmp_path / "empty.sqlite3"
@@ -230,7 +268,7 @@ def test_components_v2_rendering_and_empty_dashboard(tmp_path):
     )
     dashboard = renderer.dashboard()
     assert isinstance(dashboard.view.children[0], discord.ui.Container)
-    assert "No quests recorded yet." in view_text(dashboard.view)
+    assert "Recent activity" in view_text(dashboard.view)
 
     interaction = MagicMock()
     interaction.response.is_done.return_value = True
