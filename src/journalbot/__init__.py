@@ -1,2 +1,1 @@
 """JournalBot Discord application."""
-

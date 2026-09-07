@@ -16,6 +16,7 @@ from journalbot.campaigns import (
     NoCampaignSelectedError,
 )
 from journalbot.database import get_database_path
+from journalbot.journal_ui import JournalRenderer
 from journalbot.quests import QuestError, QuestStore
 from journalbot.sessions import SessionError, SessionStore
 
@@ -54,9 +55,7 @@ def parse_named_arguments(
                     tokens[index].startswith("--")
                     or re.fullmatch(r"[a-z][a-z0-9_-]*=.*", tokens[index])
                 ):
-                    raise CommandArgumentsError(
-                        f"Parameter `{key}` requires a value."
-                    )
+                    raise CommandArgumentsError(f"Parameter `{key}` requires a value.")
                 value = tokens[index]
         elif "=" in token:
             key, value = token.split("=", 1)
@@ -100,6 +99,8 @@ LOGGED_COMMANDS = frozenset(
         "complete-quest",
         "fail-quest",
         "progress-quest",
+        "add-journal-event",
+        "journal",
     }
 )
 
@@ -108,34 +109,36 @@ COMMANDS_HELP = "\n".join(
         "Available commands:",
         "- `Bot: describe` — describe JournalBot's purpose.",
         "- `Bot: help` or `Bot: commands` — show this command list.",
-        "- `!start-campaign title=\"...\" [description=\"...\"]` — create a campaign.",
+        '- `!start-campaign title="..." [description="..."]` — create a campaign.',
         "- `!use-campaign <identifier>` — select a campaign.",
         "- `!list-campaign` — list campaigns.",
         "- `!read-campaign <identifier>` — show campaign details.",
-        "- `!update-campaign <identifier> [title=\"...\"] "
-        "[description=\"...\"]` — update metadata.",
+        '- `!update-campaign <identifier> [title="..."] '
+        '[description="..."]` — update metadata.',
         "- `!end-campaign` — end the selected campaign.",
-        "- `!start-session [title=\"...\"] [description=\"...\"]` — create a session.",
+        '- `!start-session [title="..."] [description="..."]` — create a session.',
         "- `!use-session <identifier>` — select a session.",
         "- `!list-session` — list sessions for the current campaign.",
         "- `!read-session <identifier>` — show session details.",
-        "- `!update-session <identifier> [title=\"...\"] "
-        "[description=\"...\"] [played_at=\"...\"]` — "
+        '- `!update-session <identifier> [title="..."] '
+        '[description="..."] [played_at="..."]` — '
         "update session metadata.",
         "- `!end-session` — end the selected session.",
-        "- `!create-quest title=\"...\" description=\"...\" "
-        "[quest_giver=\"...\"] [received_at_location=\"...\"]` — create a quest.",
-        "- `!update-quest <identifier> [title=\"...\"] "
-        "[description=\"...\"] [quest_giver=\"...\"] "
-        "[received_at_location=\"...\"]` — update quest metadata.",
+        '- `!create-quest title="..." description="..." '
+        '[quest_giver="..."] [received_at_location="..."]` — create a quest.',
+        '- `!update-quest <identifier> [title="..."] '
+        '[description="..."] [quest_giver="..."] '
+        '[received_at_location="..."]` — update quest metadata.',
         "- `!quest-details <identifier>` — show quest details.",
-        "- `!list-quests [status=\"all|active|completed|failed|finished\"]` — "
+        '- `!list-quests [status="all|active|completed|failed|finished"]` — '
         "list quests.",
         "- `!complete-quest <identifier>` — complete a quest.",
         "- `!fail-quest <identifier>` — fail a quest.",
-        "- `!progress-quest <identifier> description=\"...\"` — add quest progress.",
-        "Named options also support `--key \"value\"`, for example "
-        "`!create-quest --title \"Find the merchant\" --description \"...\"`.",
+        '- `!progress-quest <identifier> description="..."` — add quest progress.',
+        '- `!add-journal-event description="..."` — add a session journal entry.',
+        "- `!journal` — open the interactive journal panel.",
+        'Named options also support `--key "value"`, for example '
+        '`!create-quest --title "Find the merchant" --description "..."`.',
     )
 )
 
@@ -175,8 +178,7 @@ class CampaignCommands(commands.Cog):
         if unknown:
             names = ", ".join(f"`{name}`" for name in unknown)
             await ctx.send(
-                f"Unknown parameter(s): {names}. "
-                "Use `Bot: help` for command usage."
+                f"Unknown parameter(s): {names}. Use `Bot: help` for command usage."
             )
             return None
 
@@ -210,14 +212,11 @@ class CampaignCommands(commands.Cog):
             await ctx.send(str(error))
             return
         await ctx.send(
-            f"Campaign **{campaign.title}** created and selected "
-            f"(ID: {campaign.id})."
+            f"Campaign **{campaign.title}** created and selected (ID: {campaign.id})."
         )
 
     @commands.command(name="use-campaign")
-    async def use_campaign(
-        self, ctx: commands.Context, *, arguments: str = ""
-    ) -> None:
+    async def use_campaign(self, ctx: commands.Context, *, arguments: str = "") -> None:
         """Select a campaign by ID or exact title."""
         options = await self._parse_arguments(
             ctx,
@@ -236,9 +235,7 @@ class CampaignCommands(commands.Cog):
         except CampaignError as error:
             await ctx.send(str(error))
             return
-        await ctx.send(
-            f"Selected campaign **{campaign.title}** (ID: {campaign.id})."
-        )
+        await ctx.send(f"Selected campaign **{campaign.title}** (ID: {campaign.id}).")
 
     @commands.command(name="list-campaign")
     async def list_campaign(
@@ -316,14 +313,10 @@ class CampaignCommands(commands.Cog):
         except (CampaignError, ValueError) as error:
             await ctx.send(str(error))
             return
-        await ctx.send(
-            f"Campaign updated: **{campaign.title}** (ID: {campaign.id})."
-        )
+        await ctx.send(f"Campaign updated: **{campaign.title}** (ID: {campaign.id}).")
 
     @commands.command(name="end-campaign")
-    async def end_campaign(
-        self, ctx: commands.Context, *, arguments: str = ""
-    ) -> None:
+    async def end_campaign(self, ctx: commands.Context, *, arguments: str = "") -> None:
         """End the current campaign."""
         if await self._parse_arguments(ctx, arguments, set()) is None:
             return
@@ -342,9 +335,7 @@ class CampaignCommands(commands.Cog):
         self, ctx: commands.Context, *, arguments: str = ""
     ) -> None:
         """Create and select a session for the current campaign."""
-        options = await self._parse_arguments(
-            ctx, arguments, {"title", "description"}
-        )
+        options = await self._parse_arguments(ctx, arguments, {"title", "description"})
         if options is None:
             return
         guild_id = await self._require_guild(ctx)
@@ -363,9 +354,7 @@ class CampaignCommands(commands.Cog):
         )
 
     @commands.command(name="use-session")
-    async def use_session(
-        self, ctx: commands.Context, *, arguments: str = ""
-    ) -> None:
+    async def use_session(self, ctx: commands.Context, *, arguments: str = "") -> None:
         """Select a session by ID or exact title."""
         options = await self._parse_arguments(
             ctx,
@@ -390,9 +379,7 @@ class CampaignCommands(commands.Cog):
         )
 
     @commands.command(name="list-session")
-    async def list_session(
-        self, ctx: commands.Context, *, arguments: str = ""
-    ) -> None:
+    async def list_session(self, ctx: commands.Context, *, arguments: str = "") -> None:
         """List sessions for the current campaign."""
         if await self._parse_arguments(ctx, arguments, set()) is None:
             return
@@ -420,9 +407,7 @@ class CampaignCommands(commands.Cog):
         )
 
     @commands.command(name="read-session")
-    async def read_session(
-        self, ctx: commands.Context, *, arguments: str = ""
-    ) -> None:
+    async def read_session(self, ctx: commands.Context, *, arguments: str = "") -> None:
         """Display session details from the current campaign."""
         options = await self._parse_arguments(
             ctx,
@@ -442,14 +427,21 @@ class CampaignCommands(commands.Cog):
         except (CampaignError, SessionError) as error:
             await ctx.send(str(error))
             return
-        await ctx.send(
+        events = self.sessions.list_journal_events_for_session(session.id)
+        lines = [
             f"ID: {session.id}\nCampaign ID: {session.campaign_id}\n"
             f"Number: {session.number}\nTitle: {session.title}\n"
             f"Description: {session.description or '(none)'}\n"
             f"Status: {session.status}\nCreated at: {session.created_at}\n"
             f"Played at: {session.played_at}\n"
             f"Ended at: {session.ended_at or '(ongoing)'}"
-        )
+        ]
+        if events:
+            lines.append(
+                "\nJournal events:\n"
+                + "\n".join(f"- {event.description}" for event in events)
+            )
+        await ctx.send("".join(lines))
 
     @commands.command(name="update-session")
     async def update_session(
@@ -488,9 +480,7 @@ class CampaignCommands(commands.Cog):
         )
 
     @commands.command(name="end-session")
-    async def end_session(
-        self, ctx: commands.Context, *, arguments: str = ""
-    ) -> None:
+    async def end_session(self, ctx: commands.Context, *, arguments: str = "") -> None:
         """End the current session."""
         if await self._parse_arguments(ctx, arguments, set()) is None:
             return
@@ -503,6 +493,49 @@ class CampaignCommands(commands.Cog):
             await ctx.send(str(error))
             return
         await ctx.send(f"Session **{session.title}** ended.")
+
+    @commands.command(name="add-journal-event")
+    async def add_journal_event(
+        self, ctx: commands.Context, *, arguments: str = ""
+    ) -> None:
+        """Add a historical session-level journal event."""
+        options = await self._parse_arguments(
+            ctx,
+            arguments,
+            {"description"},
+            {"description"},
+        )
+        if options is None:
+            return
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        try:
+            self.sessions.create_journal_event(
+                guild_id,
+                options["description"],
+            )
+            session = self.sessions.current(guild_id)
+        except (CampaignError, SessionError, ValueError) as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(f"Journal event added to Session #{session.number}.")
+
+    @commands.command(name="journal")
+    async def journal(self, ctx: commands.Context, *, arguments: str = "") -> None:
+        """Open the interactive journal panel."""
+        if await self._parse_arguments(ctx, arguments, set()) is None:
+            return
+        guild_id = await self._require_guild(ctx)
+        if guild_id is None:
+            return
+        renderer = JournalRenderer(self.store, self.sessions, self.quests, guild_id)
+        try:
+            rendered = renderer.dashboard()
+        except (CampaignError, QuestError, SessionError, ValueError) as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(view=rendered.view)
 
     @commands.command(name="create-quest")
     async def create_quest(
@@ -627,9 +660,7 @@ class CampaignCommands(commands.Cog):
         await ctx.send("".join(lines))
 
     @commands.command(name="list-quests")
-    async def list_quests(
-        self, ctx: commands.Context, *, arguments: str = ""
-    ) -> None:
+    async def list_quests(self, ctx: commands.Context, *, arguments: str = "") -> None:
         """List quests for the current campaign by lifecycle state."""
         options = await self._parse_arguments(ctx, arguments, {"status"})
         if options is None:
@@ -647,9 +678,7 @@ class CampaignCommands(commands.Cog):
             await ctx.send(f"No quests found for the current campaign ({status}).")
             return
         await ctx.send(
-            "\n".join(
-                f"{item.id}: {item.title} [{item.status}]" for item in quests
-            )
+            "\n".join(f"{item.id}: {item.title} [{item.status}]" for item in quests)
         )
 
     @commands.command(name="complete-quest")
@@ -677,9 +706,7 @@ class CampaignCommands(commands.Cog):
         await ctx.send(f"Quest **{quest.title}** marked as completed.")
 
     @commands.command(name="fail-quest")
-    async def fail_quest(
-        self, ctx: commands.Context, *, arguments: str = ""
-    ) -> None:
+    async def fail_quest(self, ctx: commands.Context, *, arguments: str = "") -> None:
         """Mark a quest as failed."""
         options = await self._parse_arguments(
             ctx,

@@ -9,7 +9,12 @@ from pathlib import Path
 from sqlalchemy import select
 
 from journalbot.campaigns import NoCampaignSelectedError
-from journalbot.database import SessionModel, ServerContextModel, create_session_factory
+from journalbot.database import (
+    JournalEventModel,
+    SessionModel,
+    ServerContextModel,
+    create_session_factory,
+)
 
 
 class SessionError(Exception):
@@ -47,6 +52,16 @@ class Session:
     ended_at: str | None
 
 
+@dataclass(frozen=True)
+class JournalEvent:
+    """A historical session-level event that is not tied to a quest."""
+
+    id: int
+    session_id: int
+    description: str
+    created_at: str
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -62,6 +77,15 @@ def _session(model: SessionModel) -> Session:
         created_at=model.created_at,
         played_at=model.played_at,
         ended_at=model.ended_at,
+    )
+
+
+def _journal_event(model: JournalEventModel) -> JournalEvent:
+    return JournalEvent(
+        id=model.id,
+        session_id=model.session_id,
+        description=model.description,
+        created_at=model.created_at,
     )
 
 
@@ -81,9 +105,7 @@ class SessionStore:
         timestamp = _now()
         with self.session_factory.begin() as session:
             context = session.get(ServerContextModel, str(guild_id))
-            campaign = (
-                context.current_campaign if context is not None else None
-            )
+            campaign = context.current_campaign if context is not None else None
             if campaign is None or context is None:
                 raise NoCampaignSelectedError(
                     "No campaign is currently selected. "
@@ -91,8 +113,7 @@ class SessionStore:
                 )
             if campaign.status == "ENDED":
                 raise SessionError(
-                    "The selected campaign has ended. "
-                    "Select an active campaign first."
+                    "The selected campaign has ended. Select an active campaign first."
                 )
             active = session.scalar(
                 select(SessionModel.id).where(
@@ -193,12 +214,16 @@ class SessionStore:
             value = identifier.strip()
             if value.lower().startswith("id:"):
                 raw_id = value[3:].strip()
-                model = session.scalar(
-                    select(SessionModel).where(
-                        SessionModel.id == int(raw_id),
-                        SessionModel.campaign_id == campaign_id,
+                model = (
+                    session.scalar(
+                        select(SessionModel).where(
+                            SessionModel.id == int(raw_id),
+                            SessionModel.campaign_id == campaign_id,
+                        )
                     )
-                ) if raw_id.isdigit() else None
+                    if raw_id.isdigit()
+                    else None
+                )
             elif value.isdigit():
                 model = session.scalar(
                     select(SessionModel).where(
@@ -221,9 +246,7 @@ class SessionStore:
                     )
                 )
             if model is None:
-                raise SessionNotFoundError(
-                    f"Session '{identifier}' was not found."
-                )
+                raise SessionNotFoundError(f"Session '{identifier}' was not found.")
             context.current_session = model
             context.updated_at = _now()
         return _session(model)
@@ -254,9 +277,7 @@ class SessionStore:
         with self.session_factory.begin() as session:
             model = session.get(SessionModel, found.id)
             if model is None:
-                raise SessionNotFoundError(
-                    f"Session '{identifier}' was not found."
-                )
+                raise SessionNotFoundError(f"Session '{identifier}' was not found.")
             if title is not None:
                 new_title = title.strip()
                 if not new_title:
@@ -285,19 +306,66 @@ class SessionStore:
         with self.session_factory.begin() as session:
             model = session.get(SessionModel, current.id)
             if model is None:
-                raise SessionNotFoundError(
-                    f"Session '{current.id}' was not found."
-                )
+                raise SessionNotFoundError(f"Session '{current.id}' was not found.")
             model.status = "ENDED"
             model.ended_at = _now()
         return self.current(guild_id)
 
+    def create_journal_event(
+        self,
+        guild_id: int | str,
+        description: str,
+    ) -> JournalEvent:
+        """Add a historical session-level event for the selected session."""
+        clean_description = (description or "").strip()
+        if not clean_description:
+            raise ValueError("Journal event description cannot be empty.")
+        with self.session_factory.begin() as session:
+            context = session.get(ServerContextModel, str(guild_id))
+            campaign_id = context.current_campaign_id if context is not None else None
+            if campaign_id is None:
+                raise NoCampaignSelectedError(
+                    "No campaign is currently selected. "
+                    "Use !use-campaign <id or title> first."
+                )
+            current_session = context.current_session if context is not None else None
+            if current_session is None:
+                raise NoSessionSelectedError(
+                    "No session is currently selected. "
+                    "Use !use-session <id or title> first."
+                )
+            if current_session.campaign_id != campaign_id:
+                raise ValueError(
+                    "The selected session does not belong to the current campaign."
+                )
+            model = JournalEventModel(
+                session_id=current_session.id,
+                description=clean_description,
+                created_at=_now(),
+            )
+            session.add(model)
+            session.flush()
+        return _journal_event(model)
+
+    def list_journal_events(self, guild_id: int | str) -> list[JournalEvent]:
+        """Return the historical session-level events for the current session."""
+        current = self.current(guild_id)
+        return self.list_journal_events_for_session(current.id)
+
+    def list_journal_events_for_session(self, session_id: int) -> list[JournalEvent]:
+        """Return historical session-level events for a specific session."""
+        with self.session_factory() as session:
+            models = session.scalars(
+                select(JournalEventModel)
+                .where(JournalEventModel.session_id == session_id)
+                .order_by(JournalEventModel.created_at, JournalEventModel.id)
+            ).all()
+        return [_journal_event(model) for model in models]
+
     def _current_campaign_id(self, guild_id: int | str) -> int:
         with self.session_factory() as session:
             context = session.get(ServerContextModel, str(guild_id))
-            campaign_id = (
-                context.current_campaign_id if context is not None else None
-            )
+            campaign_id = context.current_campaign_id if context is not None else None
         if campaign_id is None:
             raise NoCampaignSelectedError(
                 "No campaign is currently selected. "

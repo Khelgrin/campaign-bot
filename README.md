@@ -62,5 +62,6 @@ session, and quest commands such as `!start-campaign`, `!use-campaign`,
 `!list-campaign`, `!read-campaign`, `!update-campaign`, `!end-campaign`,
 `!start-session`, `!use-session`, `!list-session`, `!read-session`,
 `!update-session`, `!end-session`, `!create-quest`, `!update-quest`,
-`!quest-details`, `!list-quests`, `!complete-quest`, and `!fail-quest`.
+`!quest-details`, `!list-quests`, `!complete-quest`, `!fail-quest`, and
+`!journal` for the interactive journal panel.
 Send `Bot: help` or `Bot: commands` to list them.

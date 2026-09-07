@@ -218,8 +218,7 @@ def test_missing_required_parameter_explains_how_to_get_help(
     run(bot.on_command_error(context, error))
 
     context.send.assert_awaited_once_with(
-        "Missing required parameter: `title`. "
-        "Use `Bot: help` for command usage."
+        "Missing required parameter: `title`. Use `Bot: help` for command usage."
     )
 
 
@@ -342,11 +341,7 @@ def test_campaign_commands_cover_lifecycle_and_guild_context(tmp_path) -> None:
     )
 
     ctx.send.reset_mock()
-    run(
-        cast(Any, cog.read_campaign.callback)(
-            cog, ctx, arguments=str(campaign.id)
-        )
-    )
+    run(cast(Any, cog.read_campaign.callback)(cog, ctx, arguments=str(campaign.id)))
     read_response = ctx.send.await_args.args[0]
     assert f"ID: {campaign.id}" in read_response
     assert "Title: Kingmaker" in read_response
@@ -358,10 +353,7 @@ def test_campaign_commands_cover_lifecycle_and_guild_context(tmp_path) -> None:
         cast(Any, cog.update_campaign.callback)(
             cog,
             ctx,
-            arguments=(
-                f'{campaign.id} title="New Kingmaker" '
-                'description="Updated"'
-            ),
+            arguments=(f'{campaign.id} title="New Kingmaker" description="Updated"'),
         )
     )
     updated = cog.store.find(str(campaign.id))
@@ -375,11 +367,7 @@ def test_campaign_commands_cover_lifecycle_and_guild_context(tmp_path) -> None:
     ctx.send.assert_awaited_once_with("Campaign **New Kingmaker** ended.")
 
     ctx.send.reset_mock()
-    run(
-        cast(Any, cog.use_campaign.callback)(
-            cog, ctx, arguments=str(campaign.id)
-        )
-    )
+    run(cast(Any, cog.use_campaign.callback)(cog, ctx, arguments=str(campaign.id)))
     ctx.send.assert_awaited_once_with(
         f"Selected campaign **New Kingmaker** (ID: {campaign.id})."
     )
@@ -419,21 +407,41 @@ def test_session_commands_cover_lifecycle_and_context(tmp_path) -> None:
 
     ctx.send.reset_mock()
     run(cast(Any, cog.list_session.callback)(cog, ctx))
-    assert f"* 1: Opening (ID: {session.id}) [ACTIVE]" in (
-        ctx.send.await_args.args[0]
-    )
+    assert f"* 1: Opening (ID: {session.id}) [ACTIVE]" in (ctx.send.await_args.args[0])
 
     ctx.send.reset_mock()
-    run(
-        cast(Any, cog.read_session.callback)(
-            cog, ctx, arguments=str(session.id)
-        )
-    )
+    run(cast(Any, cog.read_session.callback)(cog, ctx, arguments=str(session.id)))
     read_response = ctx.send.await_args.args[0]
     assert f"ID: {session.id}" in read_response
     assert "Title: Opening" in read_response
     assert "Description: The party arrives" in read_response
     assert "Status: ACTIVE" in read_response
+
+    ctx.send.reset_mock()
+    run(
+        cast(Any, cog.add_journal_event.callback)(
+            cog,
+            ctx,
+            arguments='description="The party discovered an ancient shrine."',
+        )
+    )
+    assert "Journal event added to Session #1." in ctx.send.await_args.args[0]
+    run(
+        cast(Any, cog.add_journal_event.callback)(
+            cog,
+            ctx,
+            arguments='description="The party found a hidden passage."',
+        )
+    )
+
+    ctx.send.reset_mock()
+    run(cast(Any, cog.read_session.callback)(cog, ctx, arguments=str(session.id)))
+    read_response = ctx.send.await_args.args[0]
+    assert "Journal events:" in read_response
+    assert "The party discovered an ancient shrine." in read_response
+    assert (
+        "- The party discovered an ancient shrine.\n- The party found a hidden passage."
+    ) in read_response
 
     ctx.send.reset_mock()
     run(
@@ -459,15 +467,46 @@ def test_session_commands_cover_lifecycle_and_context(tmp_path) -> None:
     ctx.send.assert_awaited_once_with("Session **Revised opening** ended.")
 
     ctx.send.reset_mock()
-    run(
-        cast(Any, cog.use_session.callback)(
-            cog, ctx, arguments='"Revised opening"'
-        )
-    )
+    run(cast(Any, cog.use_session.callback)(cog, ctx, arguments='"Revised opening"'))
     ctx.send.assert_awaited_once_with(
         f"Selected session **Revised opening** "
         f"(ID: {session.id}, number: {session.number})."
     )
+
+
+def test_read_session_displays_events_for_requested_session(tmp_path) -> None:
+    """Reading an older session must not display events from the current session."""
+    cog = CampaignCommands(CampaignStore(tmp_path / "journalbot.sqlite3"))
+    ctx = MagicMock()
+    ctx.guild = SimpleNamespace(id=123)
+    ctx.send = AsyncMock()
+
+    run(cast(Any, cog.start_campaign.callback)(cog, ctx, arguments='title="Kingmaker"'))
+    run(cast(Any, cog.start_session.callback)(cog, ctx, arguments='title="Opening"'))
+    first_session = cog.sessions.current(123)
+    run(
+        cast(Any, cog.add_journal_event.callback)(
+            cog, ctx, arguments='description="Opening event"'
+        )
+    )
+    run(cast(Any, cog.end_session.callback)(cog, ctx))
+    run(
+        cast(Any, cog.start_session.callback)(
+            cog, ctx, arguments='title="Investigation"'
+        )
+    )
+    run(
+        cast(Any, cog.add_journal_event.callback)(
+            cog, ctx, arguments='description="Investigation event"'
+        )
+    )
+
+    ctx.send.reset_mock()
+    run(cast(Any, cog.read_session.callback)(cog, ctx, arguments=str(first_session.id)))
+
+    response = ctx.send.await_args.args[0]
+    assert "Opening event" in response
+    assert "Investigation event" not in response
 
 
 def test_campaign_commands_reject_direct_messages(tmp_path) -> None:
@@ -481,11 +520,7 @@ def test_campaign_commands_reject_direct_messages(tmp_path) -> None:
     ctx.guild = None
     ctx.send = AsyncMock()
 
-    run(
-        cast(Any, cog.start_campaign.callback)(
-            cog, ctx, arguments='title="Kingmaker"'
-        )
-    )
+    run(cast(Any, cog.start_campaign.callback)(cog, ctx, arguments='title="Kingmaker"'))
 
     ctx.send.assert_awaited_once_with(
         "Campaign commands can only be used in a Discord server."
@@ -508,11 +543,7 @@ def test_quest_creation_accepts_both_named_argument_forms(tmp_path) -> None:
             cog, ctx, arguments='--title "Kingmaker" --description "Stolen land"'
         )
     )
-    run(
-        cast(Any, cog.start_session.callback)(
-            cog, ctx, arguments='title="Opening"'
-        )
-    )
+    run(cast(Any, cog.start_session.callback)(cog, ctx, arguments='title="Opening"'))
 
     run(
         cast(Any, cog.create_quest.callback)(
@@ -560,16 +591,8 @@ def test_quest_commands_cover_details_listing_and_state_transitions(
     ctx.guild = SimpleNamespace(id=123)
     ctx.send = AsyncMock()
 
-    run(
-        cast(Any, cog.start_campaign.callback)(
-            cog, ctx, arguments='title="Kingmaker"'
-        )
-    )
-    run(
-        cast(Any, cog.start_session.callback)(
-            cog, ctx, arguments='title="Opening"'
-        )
-    )
+    run(cast(Any, cog.start_campaign.callback)(cog, ctx, arguments='title="Kingmaker"'))
+    run(cast(Any, cog.start_session.callback)(cog, ctx, arguments='title="Opening"'))
 
     run(
         cast(Any, cog.create_quest.callback)(
@@ -601,11 +624,7 @@ def test_quest_commands_cover_details_listing_and_state_transitions(
     assert 'Progress added:\n"Found tracks toward the abandoned mine."' in response
 
     ctx.send.reset_mock()
-    run(
-        cast(Any, cog.quest_details.callback)(
-            cog, ctx, arguments=str(quest_id)
-        )
-    )
+    run(cast(Any, cog.quest_details.callback)(cog, ctx, arguments=str(quest_id)))
     response = ctx.send.await_args.args[0]
     assert f"ID: {quest_id}" in response
     assert "Title: Find the Merchant" in response
@@ -642,16 +661,8 @@ def test_quest_commands_cover_details_listing_and_state_transitions(
     )
     second_id = cog.quests.list(123)[1].id
 
-    run(
-        cast(Any, cog.complete_quest.callback)(
-            cog, ctx, arguments=str(quest_id)
-        )
-    )
-    run(
-        cast(Any, cog.fail_quest.callback)(
-            cog, ctx, arguments=str(second_id)
-        )
-    )
+    run(cast(Any, cog.complete_quest.callback)(cog, ctx, arguments=str(quest_id)))
+    run(cast(Any, cog.fail_quest.callback)(cog, ctx, arguments=str(second_id)))
 
     ctx.send.reset_mock()
     run(cast(Any, cog.list_quests.callback)(cog, ctx, arguments='status="all"'))
@@ -659,20 +670,12 @@ def test_quest_commands_cover_details_listing_and_state_transitions(
     assert "Escort the Merchant" in ctx.send.await_args.args[0]
 
     ctx.send.reset_mock()
-    run(
-        cast(Any, cog.list_quests.callback)(
-            cog, ctx, arguments='status="completed"'
-        )
-    )
+    run(cast(Any, cog.list_quests.callback)(cog, ctx, arguments='status="completed"'))
     assert "Find the Missing Merchant" in ctx.send.await_args.args[0]
     assert "FAILED" not in ctx.send.await_args.args[0]
 
     ctx.send.reset_mock()
-    run(
-        cast(Any, cog.list_quests.callback)(
-            cog, ctx, arguments='status="failed"'
-        )
-    )
+    run(cast(Any, cog.list_quests.callback)(cog, ctx, arguments='status="failed"'))
     assert "Escort the Merchant" in ctx.send.await_args.args[0]
 
 
@@ -704,9 +707,7 @@ def test_named_argument_parser_rejects_nonleading_identifier() -> None:
     observable result or error.
     """
     with pytest.raises(ValueError, match="identifier must be the first"):
-        parse_named_arguments(
-            "title=value identifier=42", positional_identifier=True
-        )
+        parse_named_arguments("title=value identifier=42", positional_identifier=True)
 
 
 @pytest.mark.parametrize(
@@ -735,11 +736,7 @@ def test_command_validation_reports_usage_errors(
     ctx.guild = SimpleNamespace(id=123)
     ctx.send = AsyncMock()
 
-    run(
-        cast(Any, getattr(cog, command).callback)(
-            cog, ctx, arguments=arguments
-        )
-    )
+    run(cast(Any, getattr(cog, command).callback)(cog, ctx, arguments=arguments))
 
     assert message in ctx.send.await_args.args[0]
 
@@ -763,6 +760,7 @@ def test_command_validation_reports_usage_errors(
         "complete_quest",
         "fail_quest",
         "progress_quest",
+        "add_journal_event",
     ],
 )
 def test_all_commands_reject_direct_messages(tmp_path, command: str) -> None:
@@ -789,20 +787,17 @@ def test_all_commands_reject_direct_messages(tmp_path, command: str) -> None:
         "read_session": "1",
         "update_session": "1 title=Updated",
         "end_session": "",
-        "create_quest": 'title=Quest description=Description',
+        "create_quest": "title=Quest description=Description",
         "update_quest": "1 title=Updated",
         "quest_details": "1",
         "list_quests": "",
         "complete_quest": "1",
         "fail_quest": "1",
         "progress_quest": "1 description=Progress",
+        "add_journal_event": 'description="Session event"',
     }[command]
 
-    run(
-        cast(Any, getattr(cog, command).callback)(
-            cog, ctx, arguments=arguments
-        )
-    )
+    run(cast(Any, getattr(cog, command).callback)(cog, ctx, arguments=arguments))
 
     ctx.send.assert_awaited_once_with(
         "Campaign commands can only be used in a Discord server."
@@ -829,11 +824,7 @@ def test_quest_commands_report_missing_context_and_not_found_errors(tmp_path) ->
     )
     assert "No campaign is currently selected" in ctx.send.await_args.args[0]
 
-    run(
-        cast(Any, cog.start_campaign.callback)(
-            cog, ctx, arguments='title="Kingmaker"'
-        )
-    )
+    run(cast(Any, cog.start_campaign.callback)(cog, ctx, arguments='title="Kingmaker"'))
     ctx.send.reset_mock()
     run(
         cast(Any, cog.create_quest.callback)(
@@ -846,11 +837,7 @@ def test_quest_commands_report_missing_context_and_not_found_errors(tmp_path) ->
 
     ctx.send.reset_mock()
     for command in ("quest_details", "complete_quest", "fail_quest"):
-        run(
-            cast(Any, getattr(cog, command).callback)(
-                cog, ctx, arguments="999"
-            )
-        )
+        run(cast(Any, getattr(cog, command).callback)(cog, ctx, arguments="999"))
         assert "was not found" in ctx.send.await_args.args[0]
         ctx.send.reset_mock()
 
@@ -866,25 +853,13 @@ def test_list_quests_reports_empty_filtered_results(tmp_path) -> None:
     ctx.guild = SimpleNamespace(id=123)
     ctx.send = AsyncMock()
 
-    run(
-        cast(Any, cog.start_campaign.callback)(
-            cog, ctx, arguments='title="Kingmaker"'
-        )
-    )
+    run(cast(Any, cog.start_campaign.callback)(cog, ctx, arguments='title="Kingmaker"'))
     ctx.send.reset_mock()
-    run(
-        cast(Any, cog.list_quests.callback)(
-            cog, ctx, arguments='status="unknown"'
-        )
-    )
+    run(cast(Any, cog.list_quests.callback)(cog, ctx, arguments='status="unknown"'))
     assert "Unknown quest status filter" in ctx.send.await_args.args[0]
 
     ctx.send.reset_mock()
-    run(
-        cast(Any, cog.list_quests.callback)(
-            cog, ctx, arguments='status="completed"'
-        )
-    )
+    run(cast(Any, cog.list_quests.callback)(cog, ctx, arguments='status="completed"'))
 
     assert ctx.send.await_args.args[0] == (
         "No quests found for the current campaign (completed)."

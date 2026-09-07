@@ -9,7 +9,13 @@ from journalbot.campaigns import (
     CampaignHasActiveSessionError,
     CampaignStore,
 )
-from journalbot.database import SessionModel, create_session_factory
+from journalbot.database import (
+    JournalEventModel,
+    ServerContextModel,
+    SessionModel,
+    create_session_factory,
+)
+from journalbot.quests import QuestStore
 from journalbot.sessions import (
     ActiveSessionExistsError,
     NoCampaignSelectedError,
@@ -172,7 +178,11 @@ def test_session_update_preserves_id_and_number_and_corrects_metadata(tmp_path) 
     campaigns = CampaignStore(path)
     campaigns.create(123, "Kingmaker", None)
     sessions = SessionStore(path)
-    created = sessions.create(123, "Opening", "Initial",)
+    created = sessions.create(
+        123,
+        "Opening",
+        "Initial",
+    )
 
     updated = sessions.update(
         123, str(created.id), "Revised", "Updated", "2026-09-05T18:00:00+00:00"
@@ -438,3 +448,116 @@ def test_missing_session_context_is_explicit(tmp_path) -> None:
 
     with pytest.raises(NoSessionSelectedError):
         SessionStore(path).current(123)
+
+
+def test_session_journal_events_are_stored_and_listed_per_session(tmp_path) -> None:
+    """Session-level journal events are historical and scoped to the active session."""
+    path = tmp_path / "journalbot.sqlite3"
+    CampaignStore(path).create(123, "Kingmaker", None)
+    session = SessionStore(path).create(123, "Opening")
+
+    event = SessionStore(path).create_journal_event(
+        123,
+        "The party discovered an ancient shrine beneath the ruins.",
+    )
+
+    assert event.session_id == session.id
+    assert (
+        event.description == "The party discovered an ancient shrine beneath the ruins."
+    )
+    assert [
+        item.description for item in SessionStore(path).list_journal_events(123)
+    ] == [event.description]
+
+    SessionStore(path).end_current(123)
+    assert [
+        item.description for item in SessionStore(path).list_journal_events(123)
+    ] == [event.description]
+
+
+def test_journal_events_append_in_order_and_persist_across_store_instances(
+    tmp_path,
+) -> None:
+    """Journal events preserve append-only history and survive reopening the store."""
+    path = tmp_path / "journalbot.sqlite3"
+    CampaignStore(path).create(123, "Kingmaker", None)
+    sessions = SessionStore(path)
+    session = sessions.create(123, "Opening")
+
+    first = sessions.create_journal_event(123, "The party entered the ruins.")
+    second = sessions.create_journal_event(123, "The party found a hidden passage.")
+
+    reopened = SessionStore(path)
+    events = reopened.list_journal_events_for_session(session.id)
+
+    assert [event.id for event in events] == [first.id, second.id]
+    assert [event.description for event in events] == [
+        "The party entered the ruins.",
+        "The party found a hidden passage.",
+    ]
+
+
+def test_journal_event_rejects_a_session_from_another_campaign(tmp_path) -> None:
+    """Journal events cannot be recorded against a session in another campaign."""
+    path = tmp_path / "journalbot.sqlite3"
+    campaigns = CampaignStore(path)
+    campaign_a = campaigns.create(123, "Campaign A", None)
+    sessions = SessionStore(path)
+    session_a = sessions.create(123, "Session A")
+    sessions.end_current(123)
+
+    campaign_b = campaigns.create(123, "Campaign B", None)
+    sessions.create(123, "Session B")
+
+    factory = create_session_factory(path)
+    with factory.begin() as db:
+        context = db.get(ServerContextModel, "123")
+        assert context is not None
+        context.current_session_id = session_a.id
+
+    with pytest.raises(
+        ValueError,
+        match="selected session does not belong to the current campaign",
+    ):
+        sessions.create_journal_event(123, "Cross-campaign event")
+
+    assert campaign_a.id != campaign_b.id
+
+
+def test_database_enforces_journal_event_session_foreign_key(tmp_path) -> None:
+    """JournalEvent cannot reference a missing Session."""
+    path = tmp_path / "journalbot.sqlite3"
+    factory = create_session_factory(path)
+
+    with pytest.raises(IntegrityError):
+        with factory.begin() as db:
+            db.add(
+                JournalEventModel(
+                    session_id=999,
+                    description="Invalid session reference",
+                    created_at="now",
+                )
+            )
+
+
+def test_historical_records_survive_parent_updates_and_closure(tmp_path) -> None:
+    """Parent metadata and lifecycle changes do not overwrite historical records."""
+    path = tmp_path / "journalbot.sqlite3"
+    CampaignStore(path).create(123, "Kingmaker", None)
+    sessions = SessionStore(path)
+    session = sessions.create(123, "Opening", "Original session notes")
+    event = sessions.create_journal_event(123, "The party found a shrine.")
+
+    quest = QuestStore(path).create(123, "Find the Merchant")
+    progress = QuestStore(path).create_progress(
+        123, str(quest.id), "Found the merchant's cart."
+    )
+
+    sessions.update(123, str(session.id), "Revised opening", "Updated notes")
+    sessions.end_current(123)
+    QuestStore(path).complete(123, str(quest.id))
+
+    reopened_sessions = SessionStore(path)
+    reopened_quests = QuestStore(path)
+    assert reopened_sessions.list_journal_events_for_session(session.id)[0] == event
+    assert reopened_quests.list_progress(123, str(quest.id))[0] == progress
