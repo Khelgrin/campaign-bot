@@ -192,7 +192,7 @@ def get_database_url() -> str:
         return "sqlite:///:memory:"
 
 
-def create_session_factory(database_path: str | Path = None) -> sessionmaker[Session]:
+def create_session_factory(database_path: str | Path | None = None) -> sessionmaker[Session]:
     """Create an ORM session factory and initialize the database schema."""
     # If database_path is provided, construct a SQLite URL (for backward compatibility)
     if database_path is not None:
@@ -227,6 +227,7 @@ def create_session_factory(database_path: str | Path = None) -> sessionmaker[Ses
     with engine.begin() as connection:
         if url.startswith("postgresql://"):
             # Postgres: use information_schema
+            # noqa: E501
             result = connection.exec_driver_sql("""
                 SELECT column_name 
                 FROM information_schema.columns 
