@@ -171,34 +171,88 @@ class ServerContextModel(Base):
         back_populates="contexts"
     )
 
+def get_database_url() -> str:
+    """Return the database URL, preferring Postgres (DATABASE_URL) over SQLite."""
+    # Check for Postgres connection string (set by Railway)
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        # Railway provides postgres://, but SQLAlchemy needs postgresql://
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+        return database_url
 
-def get_database_path() -> Path:
-    """Return the configured database path, defaulting to local persistent storage."""
+    # Fall back to SQLite for local development
     configured_path = os.environ.get("JOURNALBOT_DATABASE_PATH")
-    return Path(configured_path) if configured_path else DEFAULT_DATABASE_PATH
+    database_path = Path(configured_path) if configured_path else DEFAULT_DATABASE_PATH
 
-
-def create_session_factory(database_path: str | Path) -> sessionmaker[Session]:
-    """Create an ORM session factory and initialize the database schema."""
-    path = Path(database_path)
-    if str(path) != ":memory:":
-        path.parent.mkdir(parents=True, exist_ok=True)
-        url = f"sqlite:///{path.resolve().as_posix()}"
+    if str(database_path) != ":memory:":
+        database_path.parent.mkdir(parents=True, exist_ok=True)
+        return f"sqlite:///{database_path.resolve().as_posix()}"
     else:
-        url = "sqlite:///:memory:"
+        return "sqlite:///:memory:"
 
-    engine = create_engine(url, future=True)
+
+def create_session_factory(database_path: str | Path | None = None) -> sessionmaker[Session]:
+    """Create an ORM session factory and initialize the database schema."""
+    # If database_path is provided, construct a SQLite URL (for backward compatibility)
+    if database_path is not None:
+        path = Path(database_path)
+        if str(path) != ":memory:":
+            path.parent.mkdir(parents=True, exist_ok=True)
+            url = f"sqlite:///{path.resolve().as_posix()}"
+        else:
+            url = "sqlite:///:memory:"
+    else:
+        # Use the environment-based URL (Postgres or SQLite)
+        url = get_database_url()
+
+    # Create engine with appropriate settings
+    if url.startswith("postgresql://"):
+        # Postgres-specific settings
+        engine = create_engine(
+            url,
+            future=True,
+            pool_pre_ping=True,  # Verify connections are alive
+            pool_size=10,
+            max_overflow=20,
+        )
+    else:
+        # SQLite settings
+        engine = create_engine(url, future=True)
+
+    # Create all tables from models
     Base.metadata.create_all(engine)
+
+    # Handle schema migration for current_session_id column
     with engine.begin() as connection:
-        columns = {
-            row[1]
-            for row in connection.exec_driver_sql("PRAGMA table_info(server_contexts)")
-        }
-        if "current_session_id" not in columns:
-            connection.exec_driver_sql(
-                "ALTER TABLE server_contexts ADD COLUMN current_session_id "
-                "INTEGER REFERENCES sessions(id)"
-            )
+        if url.startswith("postgresql://"):
+            # Postgres: use information_schema
+            # noqa: E501
+            result = connection.exec_driver_sql("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'server_contexts' AND column_name = 'current_session_id'
+            """)
+            column_exists = result.fetchone() is not None
+        else:
+            # SQLite: use PRAGMA
+            result = connection.exec_driver_sql("PRAGMA table_info(server_contexts)")
+            columns = {row[1] for row in result.fetchall()}
+            column_exists = "current_session_id" in columns
+
+        # Add column if it doesn't exist
+        if not column_exists:
+            if url.startswith("postgresql://"):
+                connection.exec_driver_sql("""
+                    ALTER TABLE server_contexts 
+                    ADD COLUMN current_session_id INTEGER REFERENCES sessions(id)
+                """)
+            else:
+                connection.exec_driver_sql("""
+                    ALTER TABLE server_contexts 
+                    ADD COLUMN current_session_id INTEGER REFERENCES sessions(id)
+                """)
+
     return sessionmaker(bind=engine, expire_on_commit=False)
 
 
