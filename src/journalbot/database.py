@@ -171,37 +171,6 @@ class ServerContextModel(Base):
         back_populates="contexts"
     )
 
-
-def get_database_path() -> Path:
-    """Return the configured database path, defaulting to local persistent storage."""
-    configured_path = os.environ.get("JOURNALBOT_DATABASE_PATH")
-    return Path(configured_path) if configured_path else DEFAULT_DATABASE_PATH
-
-
-def create_session_factory(database_path: str | Path) -> sessionmaker[Session]:
-    """Create an ORM session factory and initialize the database schema."""
-    path = Path(database_path)
-    if str(path) != ":memory:":
-        path.parent.mkdir(parents=True, exist_ok=True)
-        url = f"sqlite:///{path.resolve().as_posix()}"
-    else:
-        url = "sqlite:///:memory:"
-
-    engine = create_engine(url, future=True)
-    Base.metadata.create_all(engine)
-    with engine.begin() as connection:
-        columns = {
-            row[1]
-            for row in connection.exec_driver_sql("PRAGMA table_info(server_contexts)")
-        }
-        if "current_session_id" not in columns:
-            connection.exec_driver_sql(
-                "ALTER TABLE server_contexts ADD COLUMN current_session_id "
-                "INTEGER REFERENCES sessions(id)"
-            )
-    return sessionmaker(bind=engine, expire_on_commit=False)
-
-
 def get_database_url() -> str:
     """Return the database URL, preferring Postgres (DATABASE_URL) over SQLite."""
     # Check for Postgres connection string (set by Railway)
