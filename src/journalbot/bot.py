@@ -15,7 +15,7 @@ from journalbot.campaigns import (
     CampaignStore,
     NoCampaignSelectedError,
 )
-from journalbot.database import get_database_url
+from journalbot.database import get_database_path
 from journalbot.journal_ui import JournalRenderer
 from journalbot.quests import QuestError, QuestStore
 from journalbot.sessions import SessionError, SessionStore
@@ -773,7 +773,7 @@ class JournalBot(commands.Bot):
         self, *args: Any, database_path: str | None = None, **kwargs: Any
     ) -> None:
         super().__init__(*args, **kwargs)
-        resolved_path = database_path or get_database_url()
+        resolved_path = database_path or get_database_path()
         self.campaigns = CampaignStore(resolved_path)
         self.quests = QuestStore(resolved_path)
 
