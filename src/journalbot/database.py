@@ -188,7 +188,7 @@ def get_database_path() -> Path | str:
 def create_session_factory(database_path: str | Path) -> sessionmaker[Session]:
     """Create an ORM session factory and initialize the database schema."""
     if "DATABASE_URL" in os.environ:
-        url = str(database_path)
+        url = str(get_database_path())
         # Use the environment-based URL (Postgres)
         # Postgres-specific settings
         engine = create_engine(
