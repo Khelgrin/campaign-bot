@@ -222,6 +222,16 @@ def create_session_factory(database_path: str | Path) -> sessionmaker[Session]:
             url = "sqlite:///:memory:"
 
         engine = create_engine(url, future=True)
+
+        @event.listens_for(engine, "connect")
+        def _enable_sqlite_foreign_keys(
+                dbapi_connection: object, connection_record: object
+        ) -> None:
+            del connection_record
+            cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
         Base.metadata.create_all(engine)
         with engine.begin() as connection:
             columns = {
@@ -234,13 +244,3 @@ def create_session_factory(database_path: str | Path) -> sessionmaker[Session]:
                     "INTEGER REFERENCES sessions(id)"
                 )
         return sessionmaker(bind=engine, expire_on_commit=False)
-
-@event.listens_for(Engine, "connect")
-def _enable_sqlite_foreign_keys(
-    dbapi_connection: object, connection_record: object
-) -> None:
-    """Enable SQLite foreign-key enforcement for every ORM connection."""
-    del connection_record
-    cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
