@@ -15,7 +15,6 @@ from sqlalchemy import (
     event,
     text,
 )
-from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.orm import Session, sessionmaker
 

@@ -2,8 +2,6 @@ import os
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
-import pytest
-from sqlalchemy import event
 
 from journalbot.database import create_session_factory
 
