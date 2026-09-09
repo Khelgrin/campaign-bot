@@ -199,6 +199,7 @@ def create_session_factory(database_path: str | Path) -> sessionmaker[Session]:
             pool_size=10,
             max_overflow=20,
         )
+        Base.metadata.create_all(engine)
         with engine.begin() as connection:
             result = connection.exec_driver_sql("""
                 SELECT column_name 
