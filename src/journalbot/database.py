@@ -172,7 +172,7 @@ class ServerContextModel(Base):
     )
 
 
-def get_database_path() -> Path | str | None:
+def get_database_path() -> Path | str:
     """Return the configured database path, defaulting to local persistent storage."""
     configured_path = os.environ.get("JOURNALBOT_DATABASE_PATH")
     deployed_db = os.environ.get("DATABASE_URL")
@@ -189,7 +189,7 @@ def get_database_path() -> Path | str | None:
 def create_session_factory(database_path: str | Path) -> sessionmaker[Session]:
     """Create an ORM session factory and initialize the database schema."""
     if "DATABASE_URL" in os.environ:
-        url: str = database_path
+        url = str(database_path)
         # Use the environment-based URL (Postgres)
         # Postgres-specific settings
         engine = create_engine(
