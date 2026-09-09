@@ -172,35 +172,68 @@ class ServerContextModel(Base):
     )
 
 
-def get_database_path() -> Path:
+def get_database_path() -> Path | str:
     """Return the configured database path, defaulting to local persistent storage."""
     configured_path = os.environ.get("JOURNALBOT_DATABASE_PATH")
-    return Path(configured_path) if configured_path else DEFAULT_DATABASE_PATH
+    deployed_db = os.environ.get("DATABASE_URL")
+
+    if deployed_db:
+        # Railway provides postgres://, but SQLAlchemy needs postgresql://
+        if deployed_db.startswith("postgres://"):
+            deployed_db = deployed_db.replace("postgres://", "postgresql://", 1)
+        return deployed_db
+    else:
+        return Path(configured_path) if configured_path else DEFAULT_DATABASE_PATH
 
 
 def create_session_factory(database_path: str | Path) -> sessionmaker[Session]:
     """Create an ORM session factory and initialize the database schema."""
-    path = Path(database_path)
-    if str(path) != ":memory:":
-        path.parent.mkdir(parents=True, exist_ok=True)
-        url = f"sqlite:///{path.resolve().as_posix()}"
+    if "DATABASE_URL" in os.environ:
+        url = str(database_path)
+        # Use the environment-based URL (Postgres)
+        # Postgres-specific settings
+        engine = create_engine(
+            url,
+            future=True,
+            pool_pre_ping=True,  # Verify connections are alive
+            pool_size=10,
+            max_overflow=20,
+        )
+        with engine.begin() as connection:
+            result = connection.exec_driver_sql("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'server_contexts' AND column_name = 'current_session_id'
+            """)
+            column_exists = result.fetchone() is not None
+            if not column_exists:
+                connection.exec_driver_sql("""
+                    ALTER TABLE server_contexts 
+                    ADD COLUMN current_session_id INTEGER REFERENCES sessions(id)
+                """)
+            return sessionmaker(bind=engine, expire_on_commit=False)
+
     else:
-        url = "sqlite:///:memory:"
+        path = Path(database_path)
+        if str(path) != ":memory:":
+            path.parent.mkdir(parents=True, exist_ok=True)
+            url = f"sqlite:///{path.resolve().as_posix()}"
+        else:
+            url = "sqlite:///:memory:"
 
-    engine = create_engine(url, future=True)
-    Base.metadata.create_all(engine)
-    with engine.begin() as connection:
-        columns = {
-            row[1]
-            for row in connection.exec_driver_sql("PRAGMA table_info(server_contexts)")
-        }
-        if "current_session_id" not in columns:
-            connection.exec_driver_sql(
-                "ALTER TABLE server_contexts ADD COLUMN current_session_id "
-                "INTEGER REFERENCES sessions(id)"
-            )
-    return sessionmaker(bind=engine, expire_on_commit=False)
-
+        engine = create_engine(url, future=True)
+        Base.metadata.create_all(engine)
+        with engine.begin() as connection:
+            columns = {
+                row[1]
+                for row in connection.exec_driver_sql("PRAGMA table_info(server_contexts)")
+            }
+            if "current_session_id" not in columns:
+                connection.exec_driver_sql(
+                    "ALTER TABLE server_contexts ADD COLUMN current_session_id "
+                    "INTEGER REFERENCES sessions(id)"
+                )
+        return sessionmaker(bind=engine, expire_on_commit=False)
 
 @event.listens_for(Engine, "connect")
 def _enable_sqlite_foreign_keys(
